@@ -1,23 +1,26 @@
 {
-  "name": "product-service",
+  "name": "@services/product-service",
   "version": "1.0.0",
   "description": "",
   "main": "dist/handler/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.json",
     "build:watch": "tsc --watch",
     "dev": "nodemon",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "clean": "rm -rf dist",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "package": "npm run build && zip -r function.zip dist node_modules",
+    "deploy": "echo Deploying product-service..."
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.15.0",
   "dependencies": {
+    "@libs/domain": "*",
     "@aws-sdk/client-dynamodb": "^3.975.0",
     "@aws-sdk/lib-dynamodb": "^3.975.0",
     "aws-lambda": "^1.0.7",

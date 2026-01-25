@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10 # or whatever pnpm version you want
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install deps
+        run: pnpm install
+
+      - name: Build affected packages
+        run: npx turbo run build
+
+      - name: Package affected services
+        run: npx turbo run package
+
+      - name: Deploy product service
+        run: npx turbo run deploy --filter=@services/product-service
+
+      - name: Deploy changed services
+        run: |
+          for service in product-service; do
+            cd infra/services/$service
+            terraform init
+            terraform apply -auto-approve
+            cd -
+          done
