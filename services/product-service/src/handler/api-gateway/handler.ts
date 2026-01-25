@@ -1,4 +1,4 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { APIGatewayProxyEvent } from "aws-lambda";
 import { parseRequest } from "./parse-request";
 import { routes } from "./routes";
 import { response, errorResponse } from "./response";

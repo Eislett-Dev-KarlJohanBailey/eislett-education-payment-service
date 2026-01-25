@@ -38,8 +38,8 @@ export function errorResponse(error: any): APIGatewayProxyResult {
     });
   }
 
-  // Fallback (never leak internals)
-  console.error("Unhandled error:", error);
+//   // Fallback (never leak internals)
+//   console.error("Unhandled error:", error);
 
   return response(500, {
     error: "INTERNAL_SERVER_ERROR",
