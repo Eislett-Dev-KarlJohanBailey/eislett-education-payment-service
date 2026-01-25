@@ -1,4 +1,4 @@
-import { DomainError } from "../errors/domain-error";
+import { DomainError } from "../errors/domain.error";
 import { EntitlementKey } from "../value-objects/entitlement-key.vo";
 import { ProductType } from "../value-objects/product-type.vo";
 import { UsageLimit } from "../value-objects/useage-limit.vo";
