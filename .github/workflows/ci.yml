@@ -36,11 +36,45 @@ jobs:
         with:
           terraform_version: 1.7.0
 
+      - name: Setup AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Bootstrap Terraform backend
+        run: |
+          for service in product-service; do
+            export BUCKET="eislett-education-${{ steps.env.outputs.environment }}-${service}-state"
+            export TABLE="eislett-education-${{ steps.env.outputs.environment }}-${service}-state-locking"
+            export AWS_REGION="us-east-1"
+            bash bin/bootstrap_backend.sh
+          done
+
       - name: Deploy changed services
         run: |
           for service in product-service; do
             cd infra/services/$service
-            terraform init
-            terraform apply -auto-approve
+            terraform init \
+              -backend-config="bucket=eislett-education-${{ steps.env.outputs.environment }}-${service}-state" \
+              -backend-config="key=tf-infra/${{ steps.env.outputs.environment }}.tfstate" \
+              -backend-config="region=us-east-1" \
+              -backend-config="dynamodb_table=eislett-education-${{ steps.env.outputs.environment }}-${service}-state-locking" \
+              -backend-config="encrypt=true"
+            terraform apply -auto-approve \
+              -var="environment=${{ steps.env.outputs.environment }}" \
+              -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
+              -var="state_region=${{ secrets.TF_STATE_REGION }}" \
+              -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
             cd -
           done

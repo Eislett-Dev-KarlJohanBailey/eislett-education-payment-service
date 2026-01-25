@@ -1,10 +1,12 @@
 terraform {
   backend "s3" {
-    bucket = "eislett-education-product-service-state"
-    key = "tf-infra/{var.environment}.tfstate"
-    region = "us-east-1"
-    dynamodb_table = "eislett-education-product-service-state-locking"
-    encrypt = true
+    # Backend configuration is provided via -backend-config flags during terraform init
+    # to support dynamic environment-based naming: eislett-education-[environment]-[service-name]-...
+    bucket         = "placeholder" # Set via -backend-config
+    key            = "placeholder" # Set via -backend-config
+    region         = "us-east-1"   # Set via -backend-config
+    dynamodb_table = "placeholder" # Set via -backend-config
+    encrypt        = true
   }
   required_providers {
     aws = {
