@@ -47,6 +47,10 @@ export class UpdateProductUseCase {
       );
     }
 
+    if (input.providers && typeof input.providers === 'object') {
+      product.updateProviders(input.providers);
+    }
+
     await this.repo.update(product);
 
     return {

@@ -1,5 +1,6 @@
 import { RequestContext } from "../../handler/api-gateway/types";
 import { ListProductsUseCase } from "../usecases/list.product.usecase";
+import { ProductResponseMapper } from "../mappers/product.mapper";
 
 export class ListProductsController {
   constructor(
@@ -25,7 +26,7 @@ export class ListProductsController {
 
     return {
       amount: total,
-      data: result.items,
+      data: ProductResponseMapper.toDtoList(result.items),
       pagination: {
         page_size: pageSize,
         page_number: pageNumber,

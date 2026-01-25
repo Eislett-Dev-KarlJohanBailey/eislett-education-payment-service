@@ -213,6 +213,31 @@ describe('Lambda Handler - API Gateway Integration', () => {
       expect(mockSendFn).toHaveBeenCalled();
     });
 
+    it('should create a product with providers', async () => {
+      mockSendFn.mockResolvedValueOnce({});
+
+      const productData = {
+        name: 'Product with Providers',
+        description: 'Product with payment providers',
+        type: 'subscription',
+        entitlements: ['feature.analytics'],
+        providers: {
+          stripe: 'prod_stripe_123',
+          paypal: 'PP-12345',
+          powertranz: 'PT-67890'
+        }
+      };
+
+      const event = ApiGatewayEventFactory.createPostEvent('/products', productData);
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(201);
+      const body = JSON.parse(result.body);
+      expect(body).toHaveProperty('productId');
+      expect(mockSendFn).toHaveBeenCalled();
+    });
+
     it('should return 400 for invalid product data', async () => {
       const invalidData = {
         // missing required fields like name, type, entitlements
@@ -270,6 +295,68 @@ describe('Lambda Handler - API Gateway Integration', () => {
       const result = await handler(event);
 
       expect(result.statusCode).toBe(404);
+    });
+
+    it('should update product providers', async () => {
+      const existingProduct = ProductFixtures.createProductItem({
+        productId: 'prod-123',
+        providers: {
+          stripe: 'prod_stripe_123'
+        }
+      });
+
+      mockSendFn
+        .mockResolvedValueOnce({ Item: existingProduct }) // Get existing
+        .mockResolvedValueOnce({}); // Update
+
+      const updateData = {
+        providers: {
+          stripe: 'prod_stripe_456', // Update existing
+          paypal: 'PP-12345', // Add new
+          powertranz: 'PT-67890' // Add new
+        }
+      };
+
+      const event = ApiGatewayEventFactory.createPutEvent('/products/{id}', updateData, {
+        id: 'prod-123',
+      });
+      event.resource = '/products/{id}';
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      expect(mockSendFn).toHaveBeenCalledTimes(2);
+    });
+
+    it('should return product with providers', async () => {
+      const productItem = ProductFixtures.createProductItem({
+        productId: 'prod-123',
+        name: 'Product with Providers',
+        providers: {
+          stripe: 'prod_stripe_123',
+          paypal: 'PP-12345',
+          powertranz: 'PT-67890'
+        }
+      });
+
+      mockSendFn.mockResolvedValueOnce({
+        Item: productItem,
+      });
+
+      const event = ApiGatewayEventFactory.createGetEvent('/products/{id}');
+      event.pathParameters = { id: 'prod-123' };
+      event.resource = '/products/{id}';
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      const body = JSON.parse(result.body);
+      expect(body).toHaveProperty('providers');
+      expect(body.providers).toEqual({
+        stripe: 'prod_stripe_123',
+        paypal: 'PP-12345',
+        powertranz: 'PT-67890'
+      });
     });
   });
 

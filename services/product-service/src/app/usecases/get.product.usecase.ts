@@ -21,6 +21,7 @@ export class GetProductUseCase {
       entitlements: product.entitlements,
       usageLimits: product.usageLimits,
       addons: product.addons,
+      providers: product.providers,
       isActive: product.isActive,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt

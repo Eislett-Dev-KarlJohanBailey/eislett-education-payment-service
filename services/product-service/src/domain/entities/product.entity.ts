@@ -15,6 +15,8 @@ export interface ProductProps {
   
     addons?: string[]; // productIds of add-ons
   
+    providers?: Record<string, string>; // provider name -> providerId (e.g., "stripe" -> "prod_xxx", "paypal" -> "PP-xxx")
+  
     isActive: boolean;
   
     createdAt: Date;
@@ -29,6 +31,7 @@ export interface ProductProps {
     private _entitlements: EntitlementKey[];
     private _usageLimits: UsageLimit[];
     private _addons: string[];
+    private _providers: Record<string, string>;
     private _isActive: boolean;
     private _createdAt: Date;
     private _updatedAt: Date;
@@ -41,6 +44,7 @@ export interface ProductProps {
       this._entitlements = props.entitlements;
       this._usageLimits = props.usageLimits ?? [];
       this._addons = props.addons ?? [];
+      this._providers = props.providers ?? {};
       this._isActive = props.isActive;
       this._createdAt = props.createdAt;
       this._updatedAt = props.updatedAt;
@@ -86,6 +90,10 @@ export interface ProductProps {
   
     get addons(): string[] {
       return [...this._addons];
+    }
+  
+    get providers(): Record<string, string> {
+      return { ...this._providers };
     }
   
     get isActive(): boolean {
@@ -159,6 +167,47 @@ export interface ProductProps {
       if (this._addons.includes(productId)) return;
       this._addons.push(productId);
       this.touch();
+    }
+  
+    addProvider(providerName: string, providerId: string): void {
+      if (!providerName || !providerName.trim()) {
+        throw new DomainError("Provider name cannot be empty");
+      }
+      if (!providerId || !providerId.trim()) {
+        throw new DomainError("Provider ID cannot be empty");
+      }
+      this._providers[providerName.trim().toLowerCase()] = providerId.trim();
+      this.touch();
+    }
+  
+    updateProviders(providers: Record<string, string>): void {
+      if (!providers || typeof providers !== 'object') {
+        throw new DomainError("Providers must be a valid object");
+      }
+      // Validate all provider entries
+      for (const [providerName, providerId] of Object.entries(providers)) {
+        if (!providerName || !providerName.trim()) {
+          throw new DomainError("Provider name cannot be empty");
+        }
+        if (!providerId || !providerId.trim()) {
+          throw new DomainError("Provider ID cannot be empty");
+        }
+      }
+      // Merge with existing providers (lowercase keys for consistency)
+      const normalizedProviders: Record<string, string> = {};
+      for (const [key, value] of Object.entries(providers)) {
+        normalizedProviders[key.trim().toLowerCase()] = value.trim();
+      }
+      this._providers = { ...this._providers, ...normalizedProviders };
+      this.touch();
+    }
+  
+    removeProvider(providerName: string): void {
+      const normalizedName = providerName.trim().toLowerCase();
+      if (this._providers[normalizedName]) {
+        delete this._providers[normalizedName];
+        this.touch();
+      }
     }
   
     // ---------- VALIDATION ----------

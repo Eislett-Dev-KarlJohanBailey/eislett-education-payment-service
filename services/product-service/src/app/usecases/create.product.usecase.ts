@@ -17,6 +17,7 @@ export class CreateProductUseCase {
       entitlements: input.entitlements,
       usageLimits: input.usageLimits,
       addons: input.addons,
+      providers: input.providers,
       isActive: true
     });
 

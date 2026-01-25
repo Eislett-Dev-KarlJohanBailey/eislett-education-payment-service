@@ -8,6 +8,7 @@ export class ProductFixtures {
     description: string;
     type: ProductType;
     entitlements: string[];
+    providers: Record<string, string>;
     isActive: boolean;
   }> = {}): Product {
     return Product.create({
@@ -16,6 +17,7 @@ export class ProductFixtures {
       description: overrides.description || 'Test Description',
       type: overrides.type || ProductType.SUBSCRIPTION,
       entitlements: overrides.entitlements || ['test-entitlement'],
+      providers: overrides.providers,
       isActive: overrides.isActive !== undefined ? overrides.isActive : true,
     });
   }
@@ -34,6 +36,7 @@ export class ProductFixtures {
       entitlements: overrides.entitlements || ['test-entitlement'],
       usageLimits: overrides.usageLimits || [],
       addons: overrides.addons || [],
+      providers: overrides.providers || {},
       isActive: overrides.isActive !== undefined ? overrides.isActive : true,
       createdAt: overrides.createdAt || new Date().toISOString(),
       updatedAt: overrides.updatedAt || new Date().toISOString(),
