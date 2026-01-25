@@ -32,6 +32,17 @@ jobs:
       - name: Package affected services
         run: npx turbo run package
 
+      - name: Verify function.zip exists
+        run: |
+          if [ ! -f "services/product-service/function.zip" ]; then
+            echo "Error: function.zip not found after packaging"
+            echo "Listing services/product-service/:"
+            ls -la services/product-service/ || true
+            exit 1
+          fi
+          echo "✓ function.zip created successfully"
+          ls -lh services/product-service/function.zip
+
       - name: Deploy product service
         run: npx turbo run deploy --filter=@services/product-service
 
@@ -68,6 +79,11 @@ jobs:
       - name: Deploy changed services
         run: |
           for service in product-service; do
+            # Verify function.zip exists from Terraform's perspective
+            if [ ! -f "services/$service/function.zip" ]; then
+              echo "Error: function.zip not found at services/$service/function.zip"
+              exit 1
+            fi
             terraform -chdir=infra/services/$service init \
               -backend-config="bucket=eislett-education-${{ steps.env.outputs.environment }}-${service}-state" \
               -backend-config="key=tf-infra/${{ steps.env.outputs.environment }}.tfstate" \
@@ -79,5 +95,4 @@ jobs:
               -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
               -var="state_region=${{ secrets.TF_STATE_REGION }}" \
               -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
-            cd -
           done
