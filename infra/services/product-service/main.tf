@@ -37,17 +37,36 @@ data "terraform_remote_state" "foundation" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+module "product_service_iam_role" {
+  source = "../../modules/lambda_iam_role"
+
+  role_name = "product-service-lambda-role-${var.environment}"
+  
+  dynamodb_table_arns = [
+    "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/eislett-education-${var.environment}-products",
+    "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/eislett-education-${var.environment}-products/index/*"
+  ]
+
+  tags = {
+    Environment = var.environment
+    Service     = "product-service"
+  }
+}
+
 module "product_service_lambda" {
   source = "../../modules/lambda"
 
   function_name = "product-service"
   handler       = "handler/index.handler"
   runtime       = "nodejs20.x"
-
-  filename = "${path.root}/../../services/product-service/function.zip"
+  filename      = "${path.root}/../../services/product-service/function.zip"
+  iam_role_arn  = module.product_service_iam_role.role_arn
 
   environment_variables = {
-    PRODUCTS_TABLE = "eislett-education-products"
+    PRODUCTS_TABLE = "eislett-education-${var.environment}-products"
   }
 }
 

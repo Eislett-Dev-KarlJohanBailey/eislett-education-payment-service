@@ -3,7 +3,7 @@ resource "aws_lambda_function" "this" {
   handler       = var.handler
   runtime       = var.runtime
   filename      = var.filename
-  role          = aws_iam_role.lambda_exec.arn
+  role          = var.iam_role_arn
   source_code_hash = filebase64sha256(var.filename)
 
   environment {
