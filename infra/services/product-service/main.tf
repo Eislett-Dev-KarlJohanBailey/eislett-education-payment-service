@@ -64,7 +64,7 @@ module "product_service_lambda" {
   function_name = "product-service"
   handler       = "handler/index.handler"
   runtime       = "nodejs20.x"
-  filename      = "${path.root}/../../services/product-service/function.zip"
+  filename      = abspath("${path.cwd}/services/product-service/function.zip")
   iam_role_arn  = module.product_service_iam_role.role_arn
 
   environment_variables = {
