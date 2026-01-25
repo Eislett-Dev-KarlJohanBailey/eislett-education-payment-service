@@ -31,6 +31,11 @@ jobs:
       - name: Deploy product service
         run: npx turbo run deploy --filter=@services/product-service
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+
       - name: Deploy changed services
         run: |
           for service in product-service; do
