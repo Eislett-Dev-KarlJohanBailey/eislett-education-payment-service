@@ -35,3 +35,4 @@ export * from "./entitlements/app/ports/entitlement.repository";
 export * from "./entitlements/app/usecases/create.entitlement.usecase";
 export * from "./entitlements/app/usecases/update.entitlement.usecase";
 export * from "./entitlements/app/usecases/get.user.entitlements.usecase";
+export * from "./entitlements/dynamodb/dynamo.entitlement.repository";

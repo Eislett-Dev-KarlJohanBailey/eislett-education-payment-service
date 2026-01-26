@@ -71,7 +71,7 @@ jobs:
 
       - name: Bootstrap Terraform backend
         run: |
-          for service in product-service pricing-service; do
+          for service in product-service pricing-service access-service; do
             export BUCKET="eislett-education-${{ steps.env.outputs.environment }}-${service}-state"
             export TABLE="eislett-education-${{ steps.env.outputs.environment }}-${service}-state-locking"
             export AWS_REGION="us-east-1"
@@ -80,7 +80,7 @@ jobs:
 
       - name: Deploy changed services
         run: |
-          for service in product-service pricing-service; do
+          for service in product-service pricing-service access-service; do
             # Verify function.zip exists from Terraform's perspective
             if [ ! -f "services/$service/function.zip" ]; then
               echo "Error: function.zip not found at services/$service/function.zip"
@@ -92,9 +92,18 @@ jobs:
               -backend-config="region=us-east-1" \
               -backend-config="dynamodb_table=eislett-education-${{ steps.env.outputs.environment }}-${service}-state-locking" \
               -backend-config="encrypt=true"
-            terraform -chdir=infra/services/$service apply -auto-approve \
-              -var="environment=${{ steps.env.outputs.environment }}" \
-              -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
-              -var="state_region=${{ secrets.TF_STATE_REGION }}" \
-              -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
+            if [ "$service" == "access-service" ]; then
+              terraform -chdir=infra/services/$service apply -auto-approve \
+                -var="environment=${{ steps.env.outputs.environment }}" \
+                -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
+                -var="state_region=${{ secrets.TF_STATE_REGION }}" \
+                -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}" \
+                -var="jwt_access_token_secret=${{ secrets.JWT_ACCESS_TOKEN_SECRET }}"
+            else
+              terraform -chdir=infra/services/$service apply -auto-approve \
+                -var="environment=${{ steps.env.outputs.environment }}" \
+                -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
+                -var="state_region=${{ secrets.TF_STATE_REGION }}" \
+                -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
+            fi
           done
