@@ -1,17 +1,20 @@
 {
     "private": true,
     "workspaces": [
-      "services/*",
-      "libs/*"
+        "services/*",
+        "libs/*"
     ],
     "scripts": {
-      "build": "turbo run build",
-      "package": "turbo run package",
-      "deploy": "turbo run deploy"
+        "build": "turbo run build",
+        "package": "turbo run package",
+        "deploy": "turbo run deploy"
     },
     "devDependencies": {
-      "turbo": "^1.13.0",
-      "typescript": "^5.3.0"
+        "@types/jsonwebtoken": "^9.0.10",
+        "turbo": "^1.13.0",
+        "typescript": "^5.3.0"
+    },
+    "dependencies": {
+        "jsonwebtoken": "^9.0.3"
     }
-  }
-  
+}
