@@ -1,5 +1,5 @@
 import { RequestContext } from "../../handler/api-gateway/types";
-import { UpdatePriceUseCase } from "@libs/domain/src/pricing/app/usecases/update.price.usecase";
+import { UpdatePriceUseCase } from "@libs/domain";
 
 export class UpdatePriceController {
   constructor(
