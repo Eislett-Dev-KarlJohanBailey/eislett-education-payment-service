@@ -4,6 +4,7 @@
       "services/*",
       "libs/*"
     ],
+    "packageManager": "npm@10.0.0",
     "scripts": {
       "build": "turbo run build",
       "package": "turbo run package",
