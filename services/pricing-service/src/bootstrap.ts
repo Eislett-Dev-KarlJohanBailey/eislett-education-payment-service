@@ -1,9 +1,9 @@
-import { DynamoPriceRepository } from "@libs/domain/pricing/dynamodb/price.repository";
-import { CreatePriceUseCase } from "@libs/domain/pricing/app/usecases/create.price.usecase";
-import { GetPriceUseCase } from "@libs/domain/pricing/app/usecases/get.price.usecase";
-import { ListPricesByProductUseCase } from "@libs/domain/pricing/app/usecases/list.prices.by.product.usecase";
-import { UpdatePriceUseCase } from "@libs/domain/pricing/app/usecases/update.price.usecase";
-import { DeletePriceUseCase } from "@libs/domain/pricing/app/usecases/delete.price.usecase";
+import { DynamoPriceRepository } from "@libs/domain/src/pricing/dynamodb/price.repository";
+import { CreatePriceUseCase } from "@libs/domain/src/pricing/app/usecases/create.price.usecase";
+import { GetPriceUseCase } from "@libs/domain/src/pricing/app/usecases/get.price.usecase";
+import { ListPricesByProductUseCase } from "@libs/domain/src/pricing/app/usecases/list.prices.by.product.usecase";
+import { UpdatePriceUseCase } from "@libs/domain/src/pricing/app/usecases/update.price.usecase";
+import { DeletePriceUseCase } from "@libs/domain/src/pricing/app/usecases/delete.price.usecase";
 import { CreatePriceController } from "./app/controllers/create.price.controller";
 import { GetPriceController } from "./app/controllers/get.price.controller";
 import { ListPricesByProductController } from "./app/controllers/list.prices.by.product.controller";
