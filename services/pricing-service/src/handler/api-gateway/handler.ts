@@ -82,12 +82,18 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
     });
     
     const req = parseRequest(event);
-    const normalizedPath = normalizePath(req.path);
+    // Use the actual path (event.path) for route matching, not the resource template
+    // event.path is the actual request path like /prices/123
+    // event.resource is the template like /prices/{id}
+    const actualPath = event.path || req.path;
+    const normalizedPath = normalizePath(actualPath);
     
     console.log("Parsed request:", {
       method: req.method,
-      originalPath: req.path,
-      normalizedPath: normalizedPath
+      resourcePath: req.path,
+      actualPath: actualPath,
+      normalizedPath: normalizedPath,
+      pathParams: req.pathParams
     });
     
     // Update the path in the request context to the normalized version
@@ -96,7 +102,7 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
       path: normalizedPath
     };
     
-    const handler = findRouteHandler(req.method, req.path);
+    const handler = findRouteHandler(req.method, normalizedPath);
     console.log("Found handler:", handler ? "yes" : "no");
 
     if (!handler) {
