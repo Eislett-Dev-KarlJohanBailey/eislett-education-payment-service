@@ -1,5 +1,5 @@
 import { RequestContext } from "../../handler/api-gateway/types";
-import { GetPriceUseCase } from "../usecases/get.price.usecase";
+import { GetPriceUseCase } from "@libs/domain/src/pricing/app/usecases/get.price.usecase";
 
 export class GetPriceController {
   constructor(
