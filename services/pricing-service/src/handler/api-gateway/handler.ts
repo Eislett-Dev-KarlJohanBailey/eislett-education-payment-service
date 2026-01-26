@@ -14,23 +14,50 @@ function normalizePath(path: string): string {
 }
 
 /**
- * Finds a matching route handler by checking if the path starts with the route pattern
- * Supports both exact matches and partial matches (e.g., /v1/prices matches /prices)
+ * Extracts path parameters from a path based on a route pattern
+ * Example: extractPathParams("/prices/123", "/prices/{id}") => { id: "123" }
  */
-function findRouteHandler(method: string, path: string): ((req: any) => Promise<any>) | null {
+function extractPathParams(path: string, routePattern: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  const pathSegments = path.split("/").filter(s => s.length > 0);
+  const patternSegments = routePattern.split("/").filter(s => s.length > 0);
+  
+  if (pathSegments.length !== patternSegments.length) {
+    return params;
+  }
+  
+  for (let i = 0; i < patternSegments.length; i++) {
+    const patternSegment = patternSegments[i];
+    if (patternSegment.startsWith("{") && patternSegment.endsWith("}")) {
+      const paramName = patternSegment.slice(1, -1); // Remove { and }
+      params[paramName] = pathSegments[i];
+    }
+  }
+  
+  return params;
+}
+
+/**
+ * Finds a matching route handler and extracts path parameters
+ * Returns the handler and extracted path parameters
+ */
+function findRouteHandler(
+  method: string,
+  path: string
+): { handler: ((req: any) => Promise<any>) | null; pathParams: Record<string, string> } {
   const normalizedPath = normalizePath(path);
   const pathWithoutQuery = normalizedPath.split("?")[0]; // Remove query string
   
   // First try exact match with normalized path
   const exactKey = `${method} ${normalizedPath}`;
   if (routes[exactKey]) {
-    return routes[exactKey];
+    return { handler: routes[exactKey], pathParams: {} };
   }
   
   // Try exact match with path without query params
   const exactKeyNoQuery = `${method} ${pathWithoutQuery}`;
   if (routes[exactKeyNoQuery]) {
-    return routes[exactKeyNoQuery];
+    return { handler: routes[exactKeyNoQuery], pathParams: {} };
   }
   
   // Sort routes by specificity (more path segments first, then longer paths)
@@ -61,16 +88,18 @@ function findRouteHandler(method: string, path: string): ((req: any) => Promise<
     const routeRegex = new RegExp(`^${routePattern}$`);
     
     if (routeRegex.test(pathWithoutQuery)) {
-      return handler;
+      // Extract path parameters from the matched route
+      const pathParams = extractPathParams(pathWithoutQuery, routePath);
+      return { handler, pathParams };
     }
     
     // For exact non-parameterized routes, check if path exactly matches
     if (pathWithoutQuery === routePath) {
-      return handler;
+      return { handler, pathParams: {} };
     }
   }
   
-  return null;
+  return { handler: null, pathParams: {} };
 }
 
 export async function apiHandler(event: APIGatewayProxyEvent) {
@@ -102,15 +131,29 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
       path: normalizedPath
     };
     
-    const handler = findRouteHandler(req.method, normalizedPath);
+    const { handler, pathParams: extractedPathParams } = findRouteHandler(req.method, normalizedPath);
     console.log("Found handler:", handler ? "yes" : "no");
+    console.log("Extracted path params:", extractedPathParams);
 
     if (!handler) {
       console.log("No handler found for:", `${req.method} ${req.path}`);
       return response(404, { message: "Route not found" });
     }
 
-    const result = await handler(normalizedReq);
+    // Merge extracted path parameters with any existing ones from API Gateway
+    const mergedPathParams = {
+      ...req.pathParams,
+      ...extractedPathParams
+    };
+    
+    const finalReq = {
+      ...normalizedReq,
+      pathParams: mergedPathParams
+    };
+    
+    console.log("Final request context pathParams:", finalReq.pathParams);
+
+    const result = await handler(finalReq);
     console.log("Handler executed successfully");
 
     // Simple status inference
