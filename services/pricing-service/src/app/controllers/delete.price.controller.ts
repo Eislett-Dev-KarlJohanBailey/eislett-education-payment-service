@@ -1,5 +1,5 @@
 import { RequestContext } from "../../handler/api-gateway/types";
-import { DeletePriceUseCase } from "@libs/domain/src/pricing/app/usecases/delete.price.usecase";
+import { DeletePriceUseCase } from "@libs/domain/pricing/app/usecases/delete.price.usecase";
 
 export class DeletePriceController {
   constructor(

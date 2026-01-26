@@ -1,6 +1,6 @@
 import { RequestContext } from "../../handler/api-gateway/types";
-import { ListPricesByProductUseCase } from "@libs/domain/src/pricing/app/usecases/list.prices.by.product.usecase";
-import { PriceResponseMapper } from "@libs/domain/src/pricing/app/mappers/price.mapper";
+import { ListPricesByProductUseCase } from "@libs/domain/pricing/app/usecases/list.prices.by.product.usecase";
+import { PriceResponseMapper } from "@libs/domain/pricing/app/mappers/price.mapper";
 
 export class ListPricesByProductController {
   constructor(
