@@ -4,7 +4,8 @@ import {
   import {
     DynamoDBDocumentClient,
     PutCommand,
-    QueryCommand
+    QueryCommand,
+    GetCommand
   } from "@aws-sdk/lib-dynamodb";
 import { EntitlementRepository } from "../app/ports/entitlement.repository";
 import { Entitlement } from "../domain/entities/entitlement.entity";
@@ -38,6 +39,24 @@ import { EntitlementUsage } from "../domain/entities/entitlement-usage.entity";
       );
   
       return (result.Items ?? []).map(this.toDomain);
+    }
+
+    async findByUserAndKey(userId: string, entitlementKey: string): Promise<Entitlement | null> {
+      const result = await this.client.send(
+        new GetCommand({
+          TableName: this.tableName,
+          Key: {
+            PK: `USER#${userId}`,
+            SK: `ENTITLEMENT#${entitlementKey}`,
+          },
+        })
+      );
+  
+      if (!result.Item) {
+        return null;
+      }
+  
+      return this.toDomain(result.Item);
     }
   
     async save(entitlement: Entitlement): Promise<void> {

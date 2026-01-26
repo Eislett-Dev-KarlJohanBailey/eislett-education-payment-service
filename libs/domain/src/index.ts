@@ -35,4 +35,7 @@ export * from "./entitlements/app/ports/entitlement.repository";
 export * from "./entitlements/app/usecases/create.entitlement.usecase";
 export * from "./entitlements/app/usecases/update.entitlement.usecase";
 export * from "./entitlements/app/usecases/get.user.entitlements.usecase";
+export * from "./entitlements/app/usecases/get.user.entitlement.by.key.usecase";
+export * as EntitlementErrors from "./entitlements/domain/errors/domain.error";
+export * as EntitlementNotFoundErrors from "./entitlements/domain/errors/not-found.error";
 export * from "./entitlements/dynamodb/dynamo.entitlement.repository";

@@ -1,9 +1,10 @@
 import { RequestContext } from "../../handler/api-gateway/types";
-import { GetUserEntitlementsUseCase } from "@libs/domain";
+import { GetUserEntitlementsUseCase, GetUserEntitlementByKeyUseCase } from "@libs/domain";
 
 export class GetUserEntitlementsController {
   constructor(
-    private readonly useCase: GetUserEntitlementsUseCase
+    private readonly getAllUseCase: GetUserEntitlementsUseCase,
+    private readonly getByKeyUseCase: GetUserEntitlementByKeyUseCase
   ) {}
 
   handle = async (req: RequestContext) => {
@@ -13,7 +14,18 @@ export class GetUserEntitlementsController {
       throw new Error("User ID is required");
     }
 
-    const entitlements = await this.useCase.execute(userId);
+    // Optional query parameter to filter by entitlement key
+    const entitlementKey = req.query.entitlement_key;
+
+    let entitlements: Record<string, any>;
+    
+    if (entitlementKey) {
+      // Use the new use case to get a specific entitlement by key
+      entitlements = await this.getByKeyUseCase.execute(userId, entitlementKey);
+    } else {
+      // Get all entitlements for the user
+      entitlements = await this.getAllUseCase.execute(userId);
+    }
     
     return {
       userId,

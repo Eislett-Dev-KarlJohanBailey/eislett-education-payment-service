@@ -1,4 +1,4 @@
-import { DynamoEntitlementRepository, GetUserEntitlementsUseCase } from "@libs/domain";
+import { DynamoEntitlementRepository, GetUserEntitlementsUseCase, GetUserEntitlementByKeyUseCase } from "@libs/domain";
 import { GetUserEntitlementsController } from "./app/controllers/get.user.entitlements.controller";
 
 export function bootstrap() {
@@ -11,7 +11,8 @@ export function bootstrap() {
 
   return {
     getUserEntitlementsController: new GetUserEntitlementsController(
-      new GetUserEntitlementsUseCase(entitlementRepo)
+      new GetUserEntitlementsUseCase(entitlementRepo),
+      new GetUserEntitlementByKeyUseCase(entitlementRepo)
     )
   };
 }
