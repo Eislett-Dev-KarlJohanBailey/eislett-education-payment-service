@@ -42,9 +42,29 @@ data "terraform_remote_state" "foundation" {
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# Note: Entitlements table should already exist from another service
-# If it doesn't exist, it should be created in the entitlement-service or foundation
-# For now, we'll reference it by name pattern
+# DynamoDB Table for Entitlements
+resource "aws_dynamodb_table" "entitlements" {
+  name         = "eislett-education-${var.environment}-entitlements"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "PK"
+  range_key    = "SK"
+
+  attribute {
+    name = "PK"
+    type = "S"
+  }
+
+  attribute {
+    name = "SK"
+    type = "S"
+  }
+
+  tags = {
+    Environment = var.environment
+    Service     = "access-service"
+    Name        = "Entitlements Table"
+  }
+}
 
 module "access_service_iam_role" {
   source = "../../modules/lambda_iam_role"
@@ -52,10 +72,9 @@ module "access_service_iam_role" {
   role_name = "access-service-lambda-role-${var.environment}"
   
   # DynamoDB permissions for entitlements table
-  # Assuming entitlements table follows naming: eislett-education-{environment}-entitlements
   dynamodb_table_arns = [
-    "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/eislett-education-${var.environment}-entitlements",
-    "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/eislett-education-${var.environment}-entitlements/index/*"
+    aws_dynamodb_table.entitlements.arn,
+    "${aws_dynamodb_table.entitlements.arn}/index/*"
   ]
 
   tags = {
@@ -74,7 +93,7 @@ module "access_service_lambda" {
   iam_role_arn  = module.access_service_iam_role.role_arn
 
   environment_variables = {
-    ENTITLEMENTS_TABLE      = "eislett-education-${var.environment}-entitlements"
+    ENTITLEMENTS_TABLE      = aws_dynamodb_table.entitlements.name
     JWT_ACCESS_TOKEN_SECRET = var.jwt_access_token_secret
   }
 }
