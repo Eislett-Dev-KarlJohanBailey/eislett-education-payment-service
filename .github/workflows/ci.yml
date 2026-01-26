@@ -32,16 +32,18 @@ jobs:
       - name: Package affected services
         run: npx turbo run package
 
-      - name: Verify function.zip exists
-        run: |
-          if [ ! -f "services/product-service/function.zip" ]; then
-            echo "Error: function.zip not found after packaging"
-            echo "Listing services/product-service/:"
-            ls -la services/product-service/ || true
-            exit 1
-          fi
-          echo "✓ function.zip created successfully"
-          ls -lh services/product-service/function.zip
+      # - name: Verify function.zip exists
+      #   run: |
+      #     for service in product-service pricing-service; do
+      #       if [ ! -f "services/$service/function.zip" ]; then
+      #         echo "Error: function.zip not found after packaging for $service"
+      #         echo "Listing services/$service/:"
+      #         ls -la services/$service/ || true
+      #         exit 1
+      #       fi
+      #       echo "✓ function.zip created successfully for $service"
+      #       ls -lh services/$service/function.zip
+      #     done
 
       - name: Deploy product service
         run: npx turbo run deploy --filter=@services/product-service
@@ -69,7 +71,7 @@ jobs:
 
       - name: Bootstrap Terraform backend
         run: |
-          for service in product-service; do
+          for service in product-service pricing-service; do
             export BUCKET="eislett-education-${{ steps.env.outputs.environment }}-${service}-state"
             export TABLE="eislett-education-${{ steps.env.outputs.environment }}-${service}-state-locking"
             export AWS_REGION="us-east-1"
@@ -78,7 +80,7 @@ jobs:
 
       - name: Deploy changed services
         run: |
-          for service in product-service; do
+          for service in product-service pricing-service; do
             # Verify function.zip exists from Terraform's perspective
             if [ ! -f "services/$service/function.zip" ]; then
               echo "Error: function.zip not found at services/$service/function.zip"
