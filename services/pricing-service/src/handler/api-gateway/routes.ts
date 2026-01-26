@@ -14,8 +14,8 @@ export const routes: Record<
   (req: RequestContext) => Promise<any>
 > = {
   "POST /prices": createPriceController.handle,
-  "GET /prices/{id}": getPriceController.handle,
   "GET /prices/product/{productId}": listPricesByProductController.handle,
+  "GET /prices/{id}": getPriceController.handle,
   "PUT /prices/{id}": updatePriceController.handle,
   "DELETE /prices/{id}": deletePriceController.handle
 };
