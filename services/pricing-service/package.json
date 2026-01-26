@@ -12,7 +12,7 @@
     "test:coverage": "jest --coverage",
     "clean": "rm -rf dist",
     "type-check": "tsc --noEmit",
-    "package": "npm run build && npm install --production && (if [ -L node_modules/@libs/domain ] || [ ! -d node_modules/@libs/domain/src ]; then rm -rf node_modules/@libs/domain && mkdir -p node_modules/@libs/domain && cp -r ../../libs/domain/src node_modules/@libs/domain/ && cp ../../libs/domain/package.json node_modules/@libs/domain/; fi) && zip -r function.zip dist node_modules",
+    "package": "esbuild src/handler/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js && zip -j function.zip dist/index.js",
     "deploy": "echo Deploying pricing-service..."
   },
   "keywords": [],
