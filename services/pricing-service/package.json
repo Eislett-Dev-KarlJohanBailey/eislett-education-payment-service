@@ -19,11 +19,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@libs/domain": "*",
     "@aws-sdk/client-dynamodb": "^3.975.0",
     "@aws-sdk/lib-dynamodb": "^3.975.0",
+    "@libs/domain": "*",
     "aws-lambda": "^1.0.7",
-    "crypto": "^1.0.1"
+    "crypto": "^1.0.1",
+    "esbuild": "^0.27.2"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.160",
