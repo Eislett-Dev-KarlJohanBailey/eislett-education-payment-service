@@ -66,8 +66,20 @@ function findRouteHandler(method: string, path: string): ((req: any) => Promise<
 
 export async function apiHandler(event: APIGatewayProxyEvent) {
   try {
+    console.log("Received event:", JSON.stringify(event, null, 2));
+    console.log("Environment variables:", {
+      PRODUCTS_TABLE: process.env.PRODUCTS_TABLE,
+      AWS_REGION: process.env.AWS_REGION
+    });
+    
     const req = parseRequest(event);
     const normalizedPath = normalizePath(req.path);
+    
+    console.log("Parsed request:", {
+      method: req.method,
+      originalPath: req.path,
+      normalizedPath: normalizedPath
+    });
     
     // Update the path in the request context to the normalized version
     const normalizedReq = {
@@ -76,12 +88,15 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
     };
     
     const handler = findRouteHandler(req.method, req.path);
+    console.log("Found handler:", handler ? "yes" : "no");
 
     if (!handler) {
+      console.log("No handler found for:", `${req.method} ${req.path}`);
       return response(404, { message: "Route not found" });
     }
 
     const result = await handler(normalizedReq);
+    console.log("Handler executed successfully");
 
     // Simple status inference
     if (req.method === "POST") {
@@ -95,6 +110,7 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
     return response(200, result);
 
   } catch (err) {
+    console.error("Error in apiHandler:", err);
     return errorResponse(err);
   }
 }

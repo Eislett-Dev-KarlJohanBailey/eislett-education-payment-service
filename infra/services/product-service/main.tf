@@ -42,14 +42,55 @@ data "terraform_remote_state" "foundation" {
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+# DynamoDB Table for Products
+resource "aws_dynamodb_table" "products" {
+  name         = "eislett-education-${var.environment}-products"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "PK"
+  range_key    = "SK"
+
+  attribute {
+    name = "PK"
+    type = "S"
+  }
+
+  attribute {
+    name = "SK"
+    type = "S"
+  }
+
+  attribute {
+    name = "GSI1PK"
+    type = "S"
+  }
+
+  attribute {
+    name = "GSI1SK"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "GSI1"
+    hash_key        = "GSI1PK"
+    range_key       = "GSI1SK"
+    projection_type = "ALL"
+  }
+
+  tags = {
+    Environment = var.environment
+    Service     = "product-service"
+    Name        = "Products Table"
+  }
+}
+
 module "product_service_iam_role" {
   source = "../../modules/lambda_iam_role"
 
   role_name = "product-service-lambda-role-${var.environment}"
   
   dynamodb_table_arns = [
-    "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/eislett-education-${var.environment}-products",
-    "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/eislett-education-${var.environment}-products/index/*"
+    aws_dynamodb_table.products.arn,
+    "${aws_dynamodb_table.products.arn}/index/*"
   ]
 
   tags = {
@@ -68,7 +109,7 @@ module "product_service_lambda" {
   iam_role_arn  = module.product_service_iam_role.role_arn
 
   environment_variables = {
-    PRODUCTS_TABLE = "eislett-education-${var.environment}-products"
+    PRODUCTS_TABLE = aws_dynamodb_table.products.name
   }
 }
 

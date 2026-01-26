@@ -18,10 +18,17 @@ import { Pagination } from "../app/ports/product.repository.port";
 import { PaginatedResult } from "../app/ports/product.repository.port";
 
   export class DynamoProductRepository implements ProductRepository {
-    private readonly tableName = process.env.PRODUCTS_TABLE!;
+    private readonly tableName: string;
     private readonly client: DynamoDBDocumentClient;
   
     constructor() {
+      const tableName = process.env.PRODUCTS_TABLE;
+      if (!tableName) {
+        throw new Error("PRODUCTS_TABLE environment variable is not set");
+      }
+      this.tableName = tableName;
+      console.log("DynamoProductRepository initialized with table:", this.tableName);
+      
       const raw = new DynamoDBClient({});
       this.client = DynamoDBDocumentClient.from(raw);
     }
