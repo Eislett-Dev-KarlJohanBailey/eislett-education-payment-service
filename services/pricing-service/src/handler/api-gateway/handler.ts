@@ -33,12 +33,19 @@ function findRouteHandler(method: string, path: string): ((req: any) => Promise<
     return routes[exactKeyNoQuery];
   }
   
-  // Sort routes by specificity (longer paths first) to match most specific route first
+  // Sort routes by specificity (more path segments first, then longer paths)
+  // This ensures /prices/product/{productId} is checked before /prices/{id}
   const sortedRoutes = Object.entries(routes)
     .filter(([routeKey]) => routeKey.startsWith(`${method} `))
     .sort(([a], [b]) => {
       const pathA = a.split(" ", 2)[1];
       const pathB = b.split(" ", 2)[1];
+      // Count path segments (more segments = more specific)
+      const segmentsA = pathA.split("/").filter(s => s.length > 0).length;
+      const segmentsB = pathB.split("/").filter(s => s.length > 0).length;
+      if (segmentsB !== segmentsA) {
+        return segmentsB - segmentsA; // More segments first
+      }
       return pathB.length - pathA.length; // Longer paths first
     });
   
@@ -47,9 +54,11 @@ function findRouteHandler(method: string, path: string): ((req: any) => Promise<
     const [, routePath] = routeKey.split(" ", 2);
     
     // For parameterized routes like /prices/{id}, check if path matches the pattern
-    // Convert route pattern to regex: /prices/{id} -> /prices/[^/]+
+    // Convert route pattern to regex: /prices/{id} -> /prices/[^/]+$
+    // This ensures we match the ENTIRE path, not just a prefix
     const routePattern = routePath.replace(/\{[^}]+\}/g, "[^/]+");
-    const routeRegex = new RegExp(`^${routePattern}(?:/|$|\\?|$)`);
+    // Match the entire path exactly (anchor to start and end)
+    const routeRegex = new RegExp(`^${routePattern}$`);
     
     if (routeRegex.test(pathWithoutQuery)) {
       return handler;
