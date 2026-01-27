@@ -1,5 +1,4 @@
-import { Product } from '../../domain/entities/product.entity';
-import { ProductType } from '../../domain/value-objects/product-type.vo';
+import { Product, ProductType } from '@libs/domain';
 
 export class ProductFixtures {
   static createProduct(overrides: Partial<{

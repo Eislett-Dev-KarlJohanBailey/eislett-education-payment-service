@@ -1,4 +1,4 @@
-import { DeleteProductUseCase } from "../usecases/delete.product.usecase";
+import { DeleteProductUseCase } from "@libs/domain";
 import { RequestContext } from "../../handler/api-gateway/types";
 
 export class DeleteProductController {

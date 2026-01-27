@@ -1,5 +1,5 @@
 import { RequestContext } from "../../handler/api-gateway/types";
-import { CreateProductUseCase } from "../usecases/create.product.usecase";
+import { CreateProductUseCase } from "@libs/domain";
 
 
 export class CreateProductController {

@@ -1,11 +1,5 @@
-import { DynamoProductRepository } from "./dynamodb/product.repository";
 
-import { CreateProductUseCase } from "./app/usecases/create.product.usecase";
-import { ListProductsUseCase } from "./app/usecases/list.product.usecase";
-import { SearchProductsUseCase } from "./app/usecases/search.product.usecase";
-import { GetProductUseCase } from "./app/usecases/get.product.usecase";
-import { UpdateProductUseCase } from "./app/usecases/update.product.usecase";
-import { DeleteProductUseCase } from "./app/usecases/delete.product.usecase";
+import { CreateProductUseCase, GetProductUseCase, UpdateProductUseCase, DeleteProductUseCase, DynamoProductRepository, ListProductsUseCase, SearchProductsUseCase } from "@libs/domain";
 import { CreateProductController } from "./app/controllers/create.product.controller";
 import { ListProductsController } from "./app/controllers/list.products.controller";
 import { SearchProductsController } from "./app/controllers/search.products.controller";

@@ -39,3 +39,20 @@ export * from "./entitlements/app/usecases/get.user.entitlement.by.key.usecase";
 export * as EntitlementErrors from "./entitlements/domain/errors/domain.error";
 export * as EntitlementNotFoundErrors from "./entitlements/domain/errors/not-found.error";
 export * from "./entitlements/dynamodb/dynamo.entitlement.repository";
+
+export * from "./products/domain/entities/product.entity";
+export * from "./products/domain/value-objects/product-type.vo";
+export * from "./products/domain/value-objects/useage-limit.vo";
+export * as ProductErrors from "./products/domain/errors/domain.error";
+export * as ProductNotFoundErrors from "./products/domain/errors/not-found.error";
+export * from "./products/dynamodb/product.repository";
+export * from "./products/app/mappers/product.mapper";
+export * from "./products/app/usecases/create.product.usecase";
+export * from "./products/app/usecases/update.product.usecase";
+export * from "./products/app/usecases/get.product.usecase";
+export * from "./products/app/usecases/delete.product.usecase";
+export * from "./products/app/usecases/list.product.usecase";
+export * from "./products/app/usecases/search.product.usecase";
+export * from "./products/dynamodb/product.mapper";
+export * from "./products/dynamodb/product.repository";
+export * as ProductRepositoryPorts from "./products/app/ports/product.repository.port"; // PaginatedResult and Pagination are re-exported from pricing

@@ -1,6 +1,5 @@
 import { RequestContext } from "../../handler/api-gateway/types";
-import { ListProductsUseCase } from "../usecases/list.product.usecase";
-import { ProductResponseMapper } from "../mappers/product.mapper";
+import { ListProductsUseCase, ProductResponseMapper } from "@libs/domain";
 
 export class ListProductsController {
   constructor(

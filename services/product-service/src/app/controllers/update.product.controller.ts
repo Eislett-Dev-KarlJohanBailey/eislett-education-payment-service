@@ -1,4 +1,4 @@
-import { UpdateProductUseCase } from "../usecases/update.product.usecase";
+import { UpdateProductUseCase } from "@libs/domain";
 import { RequestContext } from "../../handler/api-gateway/types";
 
 export class UpdateProductController {

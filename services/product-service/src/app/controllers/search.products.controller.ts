@@ -1,6 +1,5 @@
 import { RequestContext } from "../../handler/api-gateway/types";
-import { SearchProductsUseCase } from "../usecases/search.product.usecase";
-import { ProductResponseMapper } from "../mappers/product.mapper";
+import { SearchProductsUseCase, ProductResponseMapper } from "@libs/domain";
 
 export class SearchProductsController {
   constructor(
