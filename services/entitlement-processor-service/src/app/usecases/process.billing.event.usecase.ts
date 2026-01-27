@@ -72,6 +72,7 @@ export class ProcessBillingEventUseCase {
 
   private extractRole(event: BillingDomainEvent<any>): EntitlementRole {
     // Role is not in event payload, default to LEARNER
+    console.log(event)
     // In the future, this could fetch from a user service
     return EntitlementRole.LEARNER;
   }
