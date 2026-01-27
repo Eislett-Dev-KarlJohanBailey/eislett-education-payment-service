@@ -26,7 +26,7 @@ export function bootstrap() {
   const productRepo = new DynamoProductRepository();
   const entitlementRepo = new DynamoEntitlementRepository(entitlementsTableName);
   const createEntitlementUseCase = new CreateEntitlementUseCase(entitlementRepo);
-  const syncProductLimitsUseCase = new SyncProductLimitsToEntitlementsUseCase(entitlementRepo);
+  const syncProductLimitsUseCase = new SyncProductLimitsToEntitlementsUseCase(productRepo, entitlementRepo);
   const eventPublisher = new EntitlementEventPublisher();
 
   const processBillingEventUseCase = new ProcessBillingEventUseCase(
