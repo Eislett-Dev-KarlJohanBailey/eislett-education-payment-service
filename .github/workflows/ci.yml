@@ -71,7 +71,7 @@ jobs:
 
       - name: Bootstrap Terraform backend
         run: |
-          for service in product-service pricing-service access-service entitlement-processor-service; do
+          for service in product-service pricing-service access-service entitlement-processor-service stripe-service; do
             export BUCKET="eislett-education-${{ steps.env.outputs.environment }}-${service}-state"
             export TABLE="eislett-education-${{ steps.env.outputs.environment }}-${service}-state-locking"
             export AWS_REGION="us-east-1"
@@ -112,6 +112,24 @@ jobs:
           
           # Then: entitlement-processor-service (depends on product-service and access-service outputs)
           service="entitlement-processor-service"
+          if [ ! -f "services/$service/function.zip" ]; then
+            echo "Error: function.zip not found at services/$service/function.zip"
+            exit 1
+          fi
+          terraform -chdir=infra/services/$service init \
+            -backend-config="bucket=eislett-education-${{ steps.env.outputs.environment }}-${service}-state" \
+            -backend-config="key=tf-infra/${{ steps.env.outputs.environment }}.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="dynamodb_table=eislett-education-${{ steps.env.outputs.environment }}-${service}-state-locking" \
+            -backend-config="encrypt=true"
+          terraform -chdir=infra/services/$service apply -auto-approve \
+            -var="environment=${{ steps.env.outputs.environment }}" \
+            -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
+            -var="state_region=${{ secrets.TF_STATE_REGION }}" \
+            -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
+          
+          # Finally: stripe-service (depends on product-service, pricing-service, and entitlement-processor-service outputs)
+          service="stripe-service"
           if [ ! -f "services/$service/function.zip" ]; then
             echo "Error: function.zip not found at services/$service/function.zip"
             exit 1
