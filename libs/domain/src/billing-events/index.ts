@@ -15,3 +15,9 @@ export * from "./payments/payment-event.type";
 export * from "./payments/payment-successful.event";
 export * from "./payments/payment-action-required.event";
 export * from "./payments/payment-failed.event";
+
+/* Entitlement events */
+export * from "./entitlements/entitlement-event.type";
+export * from "./entitlements/entitlement.created.event";
+export * from "./entitlements/entitlement.updated.event";
+export * from "./entitlements/entitlement.revoked.event";

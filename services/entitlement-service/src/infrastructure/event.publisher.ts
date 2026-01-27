@@ -1,9 +1,11 @@
 import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
-import { EntitlementCreatedEvent } from "@libs/domain/src/billing-events/entitlements/entitlement.created.event";
-import { EntitlementUpdatedEvent } from "@libs/domain/src/billing-events/entitlements/entitlement.updated.event";
-import { EntitlementRevokedEvent } from "@libs/domain/src/billing-events/entitlements/entitlement.revoked.event";
-import { EntitlementEventType } from "@libs/domain/src/billing-events/entitlements/entitlement-event.type";
-import { BillingEventMetadata } from "@libs/domain/src/billing-events/base/event-metadata";
+import { BillingEvent } from "@libs/domain";
+
+type EntitlementCreatedEvent = BillingEvent.EntitlementCreatedEvent;
+type EntitlementUpdatedEvent = BillingEvent.EntitlementUpdatedEvent;
+type EntitlementRevokedEvent = BillingEvent.EntitlementRevokedEvent;
+const EntitlementEventType = BillingEvent.EntitlementEventType;
+type BillingEventMetadata = BillingEvent.BillingEventMetadata;
 
 export class EntitlementEventPublisher {
   private readonly topicArn: string;

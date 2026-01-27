@@ -55,7 +55,7 @@ Stripe Webhook → API Gateway → Lambda
 - `WEBHOOK_IDEMPOTENCY_TABLE` - DynamoDB table for webhook idempotency
 - `PRODUCTS_TABLE` - DynamoDB table name (from product-service)
 - `PRICES_TABLE` - DynamoDB table name (from pricing-service)
-- `BILLING_EVENTS_TOPIC_ARN` - SNS topic ARN (from entitlement-processor-service)
+- `BILLING_EVENTS_TOPIC_ARN` - SNS topic ARN (from entitlement-service)
 - `JWT_ACCESS_TOKEN_SECRET` - JWT secret for authentication (from Secrets Manager)
 
 ## API Endpoints

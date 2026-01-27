@@ -235,7 +235,7 @@ This platform provides a complete payment and entitlement management system for 
 ```
 External System → SNS Topic (billing-events)
                       ↓
-                 SQS Queue (entitlement-processor-queue)
+                 SQS Queue (entitlement-queue)
                       ↓
          Entitlement Processor Service (Lambda)
                       ↓
@@ -294,7 +294,7 @@ External System → SNS Topic (billing-events)
      meta: { eventId, occurredAt, source }
    }
    ↓
-3. SNS forwards to SQS queue (entitlement-processor-queue)
+3. SNS forwards to SQS queue (entitlement-queue)
    ↓
 4. Entitlement Processor Lambda triggered (batch processing)
    ↓
@@ -380,7 +380,7 @@ Each service requires specific environment variables. See individual service REA
 - [Product Service README](services/product-service/README.md)
 - [Pricing Service README](services/pricing-service/README.md)
 - [Access Service README](services/access-service/README.md)
-- [Entitlement Processor Service README](services/entitlement-processor-service/README.md)
+- [Entitlement Service README](services/entitlement-service/README.md)
 
 ### Local Development
 
@@ -415,7 +415,7 @@ eislett-education-payment-service/
 │   ├── product-service/
 │   ├── pricing-service/
 │   ├── access-service/
-│   └── entitlement-processor-service/
+│   └── entitlement-service/
 ├── libs/                  # Shared libraries (not deployed)
 │   └── domain/           # Domain models, use cases, repositories
 ├── infra/                 # Terraform infrastructure

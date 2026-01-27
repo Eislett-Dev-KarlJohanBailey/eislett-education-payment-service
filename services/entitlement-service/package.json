@@ -1,5 +1,5 @@
 {
-  "name": "@services/entitlement-processor-service",
+  "name": "@services/entitlement-service",
   "version": "1.0.0",
   "description": "",
   "main": "dist/handler/index.js",
@@ -9,7 +9,7 @@
     "clean": "rm -rf dist",
     "type-check": "tsc --noEmit",
     "package": "esbuild src/handler/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js && zip -j function.zip dist/index.js",
-    "deploy": "echo Deploying entitlement-processor-service..."
+    "deploy": "echo Deploying entitlement-service..."
   },
   "keywords": [],
   "author": "",

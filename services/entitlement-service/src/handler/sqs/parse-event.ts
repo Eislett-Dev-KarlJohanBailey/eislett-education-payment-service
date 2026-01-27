@@ -1,11 +1,11 @@
 import { SQSEvent, SQSRecord } from "aws-lambda";
-import { BillingDomainEvent } from "@libs/domain/src/billing-events/base/domain-event";
+import { BillingEvent } from "@libs/domain";
 
-export function parseSqsEvent(event: SQSEvent): BillingDomainEvent<any>[] {
+export function parseSqsEvent(event: SQSEvent): BillingEvent.BillingDomainEvent<any>[] {
   return event.Records.map(record => parseSqsRecord(record));
 }
 
-export function parseSqsRecord(record: SQSRecord): BillingDomainEvent<any> {
+export function parseSqsRecord(record: SQSRecord): BillingEvent.BillingDomainEvent<any> {
   // SQS messages from SNS contain the SNS message in the body
   let messageBody: any;
   
@@ -16,7 +16,7 @@ export function parseSqsRecord(record: SQSRecord): BillingDomainEvent<any> {
   }
 
   // If the message came from SNS, the actual event is in messageBody.Message
-  let eventData: BillingDomainEvent<any>;
+  let eventData: BillingEvent.BillingDomainEvent<any>;
   
   if (messageBody.Type === "Notification" && messageBody.Message) {
     // Message from SNS - parse the Message field

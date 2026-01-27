@@ -79,7 +79,7 @@ jobs:
       - name: Bootstrap Terraform backend
         run: |
           PROJECT_NAME="${{ steps.project.outputs.project_name }}"
-          for service in product-service pricing-service access-service entitlement-processor-service stripe-service; do
+          for service in product-service pricing-service access-service entitlement-service stripe-service; do
             export BUCKET="${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state"
             export TABLE="${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state-locking"
             export AWS_REGION="us-east-1"
@@ -121,8 +121,8 @@ jobs:
             fi
           done
           
-          # Then: entitlement-processor-service (depends on product-service and access-service outputs)
-          service="entitlement-processor-service"
+          # Then: entitlement-service (depends on product-service and access-service outputs)
+          service="entitlement-service"
           if [ ! -f "services/$service/function.zip" ]; then
             echo "Error: function.zip not found at services/$service/function.zip"
             exit 1
@@ -141,7 +141,7 @@ jobs:
             -var="state_region=${{ secrets.TF_STATE_REGION }}" \
             -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
           
-          # Finally: stripe-service (depends on product-service, pricing-service, and entitlement-processor-service outputs)
+          # Finally: stripe-service (depends on product-service, pricing-service, and entitlement-service outputs)
           service="stripe-service"
           if [ ! -f "services/$service/function.zip" ]; then
             echo "Error: function.zip not found at services/$service/function.zip"

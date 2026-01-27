@@ -26,7 +26,7 @@ payment-platform/
 │   │   ├── src/
 │   │   └── handler.ts
 │   │
-│   ├── entitlement-processor/
+│   ├── entitlement-service/
 │   │   ├── package.json
 │   │   ├── src/
 │   │   └── handler.ts

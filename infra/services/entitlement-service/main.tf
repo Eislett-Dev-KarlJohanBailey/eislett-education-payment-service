@@ -64,7 +64,7 @@ resource "aws_sns_topic" "billing_events" {
 
   tags = {
     Environment = var.environment
-    Service     = "entitlement-processor-service"
+    Service     = "entitlement-service"
     Name        = "Billing Events Topic"
   }
 }
@@ -75,44 +75,44 @@ resource "aws_sns_topic" "entitlement_updates" {
 
   tags = {
     Environment = var.environment
-    Service     = "entitlement-processor-service"
+    Service     = "entitlement-service"
     Name        = "Entitlement Updates Topic"
   }
 }
 
 # SQS Dead Letter Queue
-resource "aws_sqs_queue" "entitlement_processor_dlq" {
-  name = "${var.project_name}-${var.environment}-entitlement-processor-dlq"
+resource "aws_sqs_queue" "entitlement_dlq" {
+  name = "${var.project_name}-${var.environment}-entitlement-dlq"
 
   tags = {
     Environment = var.environment
-    Service     = "entitlement-processor-service"
-    Name        = "Entitlement Processor DLQ"
+    Service     = "entitlement-service"
+    Name        = "Entitlement DLQ"
   }
 }
 
-# SQS Queue for Entitlement Processor
-resource "aws_sqs_queue" "entitlement_processor_queue" {
-  name                       = "${var.project_name}-${var.environment}-entitlement-processor-queue"
+# SQS Queue for Entitlement Service
+resource "aws_sqs_queue" "entitlement_queue" {
+  name                       = "${var.project_name}-${var.environment}-entitlement-queue"
   visibility_timeout_seconds = 300  # 5 minutes
   message_retention_seconds  = 1209600  # 14 days
   receive_wait_time_seconds  = 20  # Long polling
 
   redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.entitlement_processor_dlq.arn
+    deadLetterTargetArn = aws_sqs_queue.entitlement_dlq.arn
     maxReceiveCount     = 3
   })
 
   tags = {
     Environment = var.environment
-    Service     = "entitlement-processor-service"
-    Name        = "Entitlement Processor Queue"
+    Service     = "entitlement-service"
+    Name        = "Entitlement Queue"
   }
 }
 
 # SQS Queue Policy to allow SNS to send messages
-resource "aws_sqs_queue_policy" "entitlement_processor_queue_policy" {
-  queue_url = aws_sqs_queue.entitlement_processor_queue.id
+resource "aws_sqs_queue_policy" "entitlement_queue_policy" {
+  queue_url = aws_sqs_queue.entitlement_queue.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -123,7 +123,7 @@ resource "aws_sqs_queue_policy" "entitlement_processor_queue_policy" {
           Service = "sns.amazonaws.com"
         }
         Action   = "sqs:SendMessage"
-        Resource = aws_sqs_queue.entitlement_processor_queue.arn
+        Resource = aws_sqs_queue.entitlement_queue.arn
         Condition = {
           ArnEquals = {
             "aws:SourceArn" = aws_sns_topic.billing_events.arn
@@ -138,12 +138,12 @@ resource "aws_sqs_queue_policy" "entitlement_processor_queue_policy" {
 resource "aws_sns_topic_subscription" "billing_events_to_sqs" {
   topic_arn = aws_sns_topic.billing_events.arn
   protocol  = "sqs"
-  endpoint  = aws_sqs_queue.entitlement_processor_queue.arn
+  endpoint  = aws_sqs_queue.entitlement_queue.arn
 }
 
 # DynamoDB Table for Processed Events (Idempotency)
 resource "aws_dynamodb_table" "processed_events" {
-  name         = "${var.project_name}-${var.environment}-entitlement-processor-events"
+  name         = "${var.project_name}-${var.environment}-entitlement-events"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "eventId"
 
@@ -159,16 +159,16 @@ resource "aws_dynamodb_table" "processed_events" {
 
   tags = {
     Environment = var.environment
-    Service     = "entitlement-processor-service"
+    Service     = "entitlement-service"
     Name        = "Processed Events Table"
   }
 }
 
-# IAM Role for Entitlement Processor Lambda
-module "entitlement_processor_iam_role" {
+# IAM Role for Entitlement Service Lambda
+module "entitlement_iam_role" {
   source = "../../modules/lambda_iam_role"
 
-  role_name = "entitlement-processor-lambda-role-${var.environment}"
+  role_name = "entitlement-lambda-role-${var.environment}"
 
   # DynamoDB permissions
   dynamodb_table_arns = [
@@ -181,14 +181,14 @@ module "entitlement_processor_iam_role" {
 
   tags = {
     Environment = var.environment
-    Service     = "entitlement-processor-service"
+    Service     = "entitlement-service"
   }
 }
 
 # Additional IAM Policy for SNS Publishing
 resource "aws_iam_role_policy" "sns_publish" {
-  name = "entitlement-processor-sns-publish-${var.environment}"
-  role = module.entitlement_processor_iam_role.role_name
+  name = "entitlement-sns-publish-${var.environment}"
+  role = module.entitlement_iam_role.role_name
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -206,8 +206,8 @@ resource "aws_iam_role_policy" "sns_publish" {
 
 # Additional IAM Policy for SQS
 resource "aws_iam_role_policy" "sqs_access" {
-  name = "entitlement-processor-sqs-access-${var.environment}"
-  role = module.entitlement_processor_iam_role.role_name
+  name = "entitlement-sqs-access-${var.environment}"
+  role = module.entitlement_iam_role.role_name
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -219,21 +219,21 @@ resource "aws_iam_role_policy" "sqs_access" {
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes"
         ]
-        Resource = aws_sqs_queue.entitlement_processor_queue.arn
+        Resource = aws_sqs_queue.entitlement_queue.arn
       }
     ]
   })
 }
 
 # Lambda Function
-module "entitlement_processor_lambda" {
+module "entitlement_lambda" {
   source = "../../modules/lambda"
 
-  function_name = "entitlement-processor"
+  function_name = "entitlement-service"
   handler       = "dist/handler/index.handler"
   runtime       = "nodejs20.x"
-  filename      = abspath("${path.cwd}/services/entitlement-processor-service/function.zip")
-  iam_role_arn  = module.entitlement_processor_iam_role.role_arn
+  filename      = abspath("${path.cwd}/services/entitlement-service/function.zip")
+  iam_role_arn  = module.entitlement_iam_role.role_arn
 
   environment_variables = {
     PRODUCTS_TABLE                = data.terraform_remote_state.product_service.outputs.products_table_name
@@ -244,9 +244,9 @@ module "entitlement_processor_lambda" {
 }
 
 # Lambda Event Source Mapping (SQS Trigger)
-resource "aws_lambda_event_source_mapping" "entitlement_processor_sqs_trigger" {
-  event_source_arn = aws_sqs_queue.entitlement_processor_queue.arn
-  function_name    = module.entitlement_processor_lambda.function_arn
+resource "aws_lambda_event_source_mapping" "entitlement_sqs_trigger" {
+  event_source_arn = aws_sqs_queue.entitlement_queue.arn
+  function_name    = module.entitlement_lambda.function_arn
   batch_size       = 10
   maximum_batching_window_in_seconds = 5
 

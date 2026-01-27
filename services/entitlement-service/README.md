@@ -1,10 +1,10 @@
-# Entitlement Processor Service
+# Entitlement Service
 
 A serverless Lambda function service that processes billing events from SQS to automatically manage user entitlements. This service creates entitlements when subscriptions/payments succeed, revokes them on cancellation/expiration, handles add-ons, and maintains idempotency through event tracking.
 
 ## Overview
 
-The Entitlement Processor Service is an AWS Lambda function triggered by SQS messages containing billing events. It processes these events to automatically create, update, or revoke user entitlements based on product purchases, subscription changes, and add-on configurations.
+The Entitlement Service is an AWS Lambda function triggered by SQS messages containing billing events. It processes these events to automatically create, update, or revoke user entitlements based on product purchases, subscription changes, and add-on configurations.
 
 ### Features
 
@@ -21,7 +21,7 @@ The Entitlement Processor Service is an AWS Lambda function triggered by SQS mes
 ```
 Billing Events → SNS Topic (billing-events) 
                     ↓
-                SQS Queue (entitlement-processor-queue)
+                SQS Queue (entitlement-queue)
                     ↓
             Lambda Function (Batch Processing)
                     ↓
@@ -49,7 +49,7 @@ The service requires the following environment variables:
 # DynamoDB Configuration
 PRODUCTS_TABLE={project-name}-dev-products
 ENTITLEMENTS_TABLE={project-name}-dev-entitlements
-PROCESSED_EVENTS_TABLE={project-name}-dev-entitlement-processor-events
+PROCESSED_EVENTS_TABLE={project-name}-dev-entitlement-events
 
 # SNS Configuration
 ENTITLEMENT_UPDATES_TOPIC_ARN=arn:aws:sns:us-east-1:123456789012:{project-name}-dev-entitlement-updates
@@ -128,7 +128,7 @@ These events are skipped (no entitlement changes):
 
 The service maintains idempotency by tracking processed events in a DynamoDB table:
 
-- **Table**: `{project-name}-{env}-entitlement-processor-events`
+- **Table**: `{project-name}-{env}-entitlement-events`
 - **Key**: `eventId` (from billing event metadata)
 - **TTL**: 30 days (automatic cleanup)
 - **Status**: `success`, `failed`, or `skipped`
@@ -180,7 +180,7 @@ The service is deployed using Terraform with the following resources:
 - **SNS Topics**:
   - `billing-events` (input) - For other services to publish billing events
   - `entitlement-updates` (output) - For other services to subscribe to entitlement changes
-- **SQS Queue**: `entitlement-processor-queue` with DLQ
+- **SQS Queue**: `entitlement-queue` with DLQ
 - **Lambda Function**: Triggered by SQS with batch processing
 - **DynamoDB Table**: `processed-events` for idempotency tracking
 - **IAM Role**: Permissions for DynamoDB, SNS, and SQS
@@ -190,12 +190,12 @@ The service is deployed using Terraform with the following resources:
 ### Terraform Deployment
 
 ```bash
-cd infra/services/entitlement-processor-service
+cd infra/services/entitlement-service
 terraform init \
-  -backend-config="bucket={project-name}-{environment}-entitlement-processor-service-state" \
+  -backend-config="bucket={project-name}-{environment}-entitlement-service-state" \
   -backend-config="key=tf-infra/{environment}.tfstate" \
   -backend-config="region=us-east-1" \
-  -backend-config="dynamodb_table={project-name}-{environment}-entitlement-processor-service-state-locking" \
+  -backend-config="dynamodb_table={project-name}-{environment}-entitlement-service-state-locking" \
   -backend-config="encrypt=true"
 
 terraform apply \

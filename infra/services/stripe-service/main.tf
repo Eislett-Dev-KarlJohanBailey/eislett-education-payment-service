@@ -53,11 +53,11 @@ data "terraform_remote_state" "pricing_service" {
   }
 }
 
-data "terraform_remote_state" "entitlement_processor_service" {
+data "terraform_remote_state" "entitlement_service" {
   backend = "s3"
 
   config = {
-    bucket = "${var.project_name}-${var.environment}-entitlement-processor-service-state"
+    bucket = "${var.project_name}-${var.environment}-entitlement-service-state"
     key    = "tf-infra/${var.environment}.tfstate"
     region = "us-east-1"
   }
@@ -194,7 +194,7 @@ resource "aws_iam_role_policy" "sns_publish" {
         Action = [
           "sns:Publish"
         ]
-        Resource = data.terraform_remote_state.entitlement_processor_service.outputs.billing_events_topic_arn
+        Resource = data.terraform_remote_state.entitlement_service.outputs.billing_events_topic_arn
       }
     ]
   })
@@ -240,7 +240,7 @@ module "stripe_service_lambda" {
     WEBHOOK_IDEMPOTENCY_TABLE      = aws_dynamodb_table.webhook_idempotency.name
     PRODUCTS_TABLE                 = data.terraform_remote_state.product_service.outputs.products_table_name
     PRICES_TABLE                   = data.terraform_remote_state.pricing_service.outputs.prices_table_name
-    BILLING_EVENTS_TOPIC_ARN       = data.terraform_remote_state.entitlement_processor_service.outputs.billing_events_topic_arn
+    BILLING_EVENTS_TOPIC_ARN       = data.terraform_remote_state.entitlement_service.outputs.billing_events_topic_arn
     JWT_ACCESS_TOKEN_SECRET        = local.jwt_access_token_secret
   }
 }

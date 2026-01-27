@@ -43,23 +43,23 @@ output "processed_events_table_details" {
 }
 
 # SQS Queue
-output "entitlement_processor_queue_url" {
-  value       = aws_sqs_queue.entitlement_processor_queue.url
-  description = "URL of the entitlement processor SQS queue"
+output "entitlement_queue_url" {
+  value       = aws_sqs_queue.entitlement_queue.url
+  description = "URL of the entitlement SQS queue"
 }
 
-output "entitlement_processor_queue_arn" {
-  value       = aws_sqs_queue.entitlement_processor_queue.arn
-  description = "ARN of the entitlement processor SQS queue"
+output "entitlement_queue_arn" {
+  value       = aws_sqs_queue.entitlement_queue.arn
+  description = "ARN of the entitlement SQS queue"
 }
 
 # DLQ
-output "entitlement_processor_dlq_url" {
-  value       = aws_sqs_queue.entitlement_processor_dlq.url
-  description = "URL of the entitlement processor dead letter queue"
+output "entitlement_dlq_url" {
+  value       = aws_sqs_queue.entitlement_dlq.url
+  description = "URL of the entitlement dead letter queue"
 }
 
-output "entitlement_processor_dlq_arn" {
-  value       = aws_sqs_queue.entitlement_processor_dlq.arn
-  description = "ARN of the entitlement processor dead letter queue"
+output "entitlement_dlq_arn" {
+  value       = aws_sqs_queue.entitlement_dlq.arn
+  description = "ARN of the entitlement dead letter queue"
 }
