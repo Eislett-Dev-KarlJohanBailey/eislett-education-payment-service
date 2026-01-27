@@ -67,6 +67,10 @@ resource "aws_sns_topic" "billing_events" {
     Service     = "entitlement-service"
     Name        = "Billing Events Topic"
   }
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 # SNS Topic for Entitlement Updates (Output)
@@ -77,6 +81,10 @@ resource "aws_sns_topic" "entitlement_updates" {
     Environment = var.environment
     Service     = "entitlement-service"
     Name        = "Entitlement Updates Topic"
+  }
+
+  lifecycle {
+    ignore_changes = [tags]
   }
 }
 
