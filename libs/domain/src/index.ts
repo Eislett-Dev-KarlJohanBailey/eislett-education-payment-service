@@ -40,6 +40,8 @@ export * as EntitlementErrors from "./entitlements/domain/errors/domain.error";
 export * as EntitlementNotFoundErrors from "./entitlements/domain/errors/not-found.error";
 export * from "./entitlements/dynamodb/dynamo.entitlement.repository";
 
+// Products
+
 export * from "./products/domain/entities/product.entity";
 export * from "./products/domain/value-objects/product-type.vo";
 export * from "./products/domain/value-objects/useage-limit.vo";
@@ -56,3 +58,7 @@ export * from "./products/app/usecases/search.product.usecase";
 export * from "./products/dynamodb/product.mapper";
 export * from "./products/dynamodb/product.repository";
 export * as ProductRepositoryPorts from "./products/app/ports/product.repository.port"; // PaginatedResult and Pagination are re-exported from pricing
+
+// BillingEvents
+
+export * as BillingEvent from "./billing-events/index";
