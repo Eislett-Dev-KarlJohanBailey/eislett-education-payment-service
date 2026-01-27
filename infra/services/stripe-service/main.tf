@@ -37,7 +37,7 @@ data "terraform_remote_state" "product_service" {
   backend = "s3"
 
   config = {
-    bucket = "eislett-education-${var.environment}-product-service-state"
+    bucket = "${var.project_name}-${var.environment}-product-service-state"
     key    = "tf-infra/${var.environment}.tfstate"
     region = "us-east-1"
   }
@@ -47,7 +47,7 @@ data "terraform_remote_state" "pricing_service" {
   backend = "s3"
 
   config = {
-    bucket = "eislett-education-${var.environment}-pricing-service-state"
+    bucket = "${var.project_name}-${var.environment}-pricing-service-state"
     key    = "tf-infra/${var.environment}.tfstate"
     region = "us-east-1"
   }
@@ -57,7 +57,7 @@ data "terraform_remote_state" "entitlement_processor_service" {
   backend = "s3"
 
   config = {
-    bucket = "eislett-education-${var.environment}-entitlement-processor-service-state"
+    bucket = "${var.project_name}-${var.environment}-entitlement-processor-service-state"
     key    = "tf-infra/${var.environment}.tfstate"
     region = "us-east-1"
   }
@@ -65,7 +65,7 @@ data "terraform_remote_state" "entitlement_processor_service" {
 
 # Get Stripe secrets from AWS Secrets Manager
 data "aws_secretsmanager_secret" "stripe_secret_key" {
-  name = "eislett-education-${var.environment}-stripe-secret-key"
+  name = "${var.project_name}-${var.environment}-stripe-secret-key"
 }
 
 data "aws_secretsmanager_secret_version" "stripe_secret_key" {
@@ -73,7 +73,7 @@ data "aws_secretsmanager_secret_version" "stripe_secret_key" {
 }
 
 data "aws_secretsmanager_secret" "stripe_webhook_secret" {
-  name = "eislett-education-${var.environment}-stripe-webhook-secret"
+  name = "${var.project_name}-${var.environment}-stripe-webhook-secret"
 }
 
 data "aws_secretsmanager_secret_version" "stripe_webhook_secret" {
@@ -81,7 +81,7 @@ data "aws_secretsmanager_secret_version" "stripe_webhook_secret" {
 }
 
 data "aws_secretsmanager_secret" "jwt_access_token_secret" {
-  name = "eislett-education-${var.environment}-jwt-access-token-secret"
+  name = "${var.project_name}-${var.environment}-jwt-access-token-secret"
 }
 
 data "aws_secretsmanager_secret_version" "jwt_access_token_secret" {
@@ -109,7 +109,7 @@ locals {
 
 # DynamoDB Table for Stripe Customers
 resource "aws_dynamodb_table" "stripe_customers" {
-  name         = "eislett-education-${var.environment}-stripe-customers"
+  name         = "${var.project_name}-${var.environment}-stripe-customers"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "userId"
 
@@ -138,7 +138,7 @@ resource "aws_dynamodb_table" "stripe_customers" {
 
 # DynamoDB Table for Webhook Idempotency
 resource "aws_dynamodb_table" "webhook_idempotency" {
-  name         = "eislett-education-${var.environment}-stripe-webhook-idempotency"
+  name         = "${var.project_name}-${var.environment}-stripe-webhook-idempotency"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "eventId"
 

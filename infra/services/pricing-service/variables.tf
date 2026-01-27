@@ -15,3 +15,9 @@ variable "environment" {
     type = string
     default = "dev"
 }
+
+variable "project_name" {
+    type = string
+    description = "Project name prefix for resource naming (e.g., 'eislett-education')"
+    default = "eislett-education"
+}

@@ -151,9 +151,27 @@ The service infrastructure includes:
 3. Copy your **Secret key** (starts with `sk_test_` for test mode or `sk_live_` for production)
 4. Keep this key secure - you'll need it for the next step
 
-### Step 2: Create Secrets in AWS Secrets Manager
+### Step 2: Configure Project Name (Optional)
+
+The project uses a configurable project name prefix for all resource naming. By default, it uses `eislett-education`, but you can customize this via GitHub repository variables.
+
+**To set a custom project name:**
+1. Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions** → **Variables**
+2. Add a new variable:
+   - **Name**: `PROJECT_NAME`
+   - **Value**: Your project name (e.g., `my-company`, `acme-corp`, etc.)
+3. The CI/CD pipeline will automatically use this value
+
+**Note**: If `PROJECT_NAME` is not set, it defaults to `eislett-education`.
+
+### Step 3: Create Secrets in AWS Secrets Manager
 
 You need to create three secrets in AWS Secrets Manager. The service will automatically read these during deployment.
+
+**Secret naming format**: `{project-name}-{environment}-{secret-type}`
+- `{project-name}` - From GitHub variable `PROJECT_NAME` (defaults to `eislett-education`)
+- `{environment}` - `dev`, `staging`, or `prod`
+- `{secret-type}` - `stripe-secret-key`, `stripe-webhook-secret`, or `jwt-access-token-secret`
 
 #### Option A: Using AWS CLI
 
@@ -161,23 +179,26 @@ You need to create three secrets in AWS Secrets Manager. The service will automa
 # Set your environment (dev, staging, or prod)
 export ENVIRONMENT="dev"
 
+# Set your project name (or use default 'eislett-education')
+export PROJECT_NAME="${PROJECT_NAME:-eislett-education}"
+
 # 1. Create Stripe Secret Key
 aws secretsmanager create-secret \
-  --name "eislett-education-${ENVIRONMENT}-stripe-secret-key" \
+  --name "${PROJECT_NAME}-${ENVIRONMENT}-stripe-secret-key" \
   --description "Stripe secret API key for ${ENVIRONMENT} environment" \
   --secret-string "sk_test_YOUR_SECRET_KEY_HERE" \
   --region us-east-1
 
 # 2. Create Stripe Webhook Secret (you'll get this after setting up webhook)
 aws secretsmanager create-secret \
-  --name "eislett-education-${ENVIRONMENT}-stripe-webhook-secret" \
+  --name "${PROJECT_NAME}-${ENVIRONMENT}-stripe-webhook-secret" \
   --description "Stripe webhook signing secret for ${ENVIRONMENT} environment" \
   --secret-string "whsec_YOUR_WEBHOOK_SECRET_HERE" \
   --region us-east-1
 
 # 3. Create JWT Access Token Secret (if not already created)
 aws secretsmanager create-secret \
-  --name "eislett-education-${ENVIRONMENT}-jwt-access-token-secret" \
+  --name "${PROJECT_NAME}-${ENVIRONMENT}-jwt-access-token-secret" \
   --description "JWT access token secret for ${ENVIRONMENT} environment" \
   --secret-string "your-jwt-secret-key-here" \
   --region us-east-1
@@ -194,7 +215,8 @@ aws secretsmanager create-secret \
    - Choose **Plaintext**
    - Enter your Stripe secret key: `sk_test_YOUR_KEY_HERE`
    - Click **Next**
-   - Secret name: `eislett-education-{environment}-stripe-secret-key`
+   - Secret name: `{project-name}-{environment}-stripe-secret-key`
+     - Replace `{project-name}` with your project name (from GitHub variable `PROJECT_NAME`, defaults to `eislett-education`)
      - Replace `{environment}` with `dev`, `staging`, or `prod`
    - Click **Next** → **Store**
 
@@ -203,7 +225,7 @@ aws secretsmanager create-secret \
    - Choose **Plaintext**
    - Enter your webhook secret: `whsec_YOUR_SECRET_HERE`
    - Click **Next**
-   - Secret name: `eislett-education-{environment}-stripe-webhook-secret`
+   - Secret name: `{project-name}-{environment}-stripe-webhook-secret`
    - Click **Next** → **Store**
 
    **Secret 3: JWT Access Token Secret**
@@ -211,7 +233,7 @@ aws secretsmanager create-secret \
    - Choose **Plaintext**
    - Enter your JWT secret
    - Click **Next**
-   - Secret name: `eislett-education-{environment}-jwt-access-token-secret`
+   - Secret name: `{project-name}-{environment}-jwt-access-token-secret`
    - Click **Next** → **Store**
 
 #### Option C: Using JSON Format
@@ -219,15 +241,18 @@ aws secretsmanager create-secret \
 If you prefer JSON format (useful for multiple keys or metadata):
 
 ```bash
+# Set your project name (or use default)
+export PROJECT_NAME="${PROJECT_NAME:-eislett-education}"
+
 # Stripe Secret Key as JSON
 aws secretsmanager create-secret \
-  --name "eislett-education-${ENVIRONMENT}-stripe-secret-key" \
+  --name "${PROJECT_NAME}-${ENVIRONMENT}-stripe-secret-key" \
   --secret-string '{"key": "sk_test_YOUR_SECRET_KEY_HERE"}' \
   --region us-east-1
 
 # Webhook Secret as JSON
 aws secretsmanager create-secret \
-  --name "eislett-education-${ENVIRONMENT}-stripe-webhook-secret" \
+  --name "${PROJECT_NAME}-${ENVIRONMENT}-stripe-webhook-secret" \
   --secret-string '{"key": "whsec_YOUR_WEBHOOK_SECRET_HERE"}' \
   --region us-east-1
 ```
@@ -277,11 +302,21 @@ aws secretsmanager get-secret-value \
 
 ### Secret Names Reference
 
+**Format**: `{project-name}-{environment}-{secret-type}`
+
 | Secret Name | Description | Example Value |
 |------------|-------------|---------------|
-| `eislett-education-{env}-stripe-secret-key` | Stripe API secret key | `sk_test_51AbC...` |
-| `eislett-education-{env}-stripe-webhook-secret` | Stripe webhook signing secret | `whsec_1234567890...` |
-| `eislett-education-{env}-jwt-access-token-secret` | JWT secret for authentication | `your-jwt-secret` |
+| `{project-name}-{env}-stripe-secret-key` | Stripe API secret key | `sk_test_51AbC...` |
+| `{project-name}-{env}-stripe-webhook-secret` | Stripe webhook signing secret | `whsec_1234567890...` |
+| `{project-name}-{env}-jwt-access-token-secret` | JWT secret for authentication | `your-jwt-secret` |
+
+**Where**:
+- `{project-name}` - From GitHub variable `PROJECT_NAME` (defaults to `eislett-education`)
+- `{env}` - Environment: `dev`, `staging`, or `prod`
+
+**Examples** (with default project name):
+- `eislett-education-dev-stripe-secret-key`
+- `eislett-education-prod-stripe-webhook-secret`
 
 Replace `{env}` with:
 - `dev` - Development environment
@@ -295,9 +330,12 @@ Replace `{env}` with:
 ```bash
 export ENVIRONMENT="dev"
 
+# Set project name (or use default)
+export PROJECT_NAME="${PROJECT_NAME:-eislett-education}"
+
 # Use Stripe test mode keys (sk_test_...)
 aws secretsmanager create-secret \
-  --name "eislett-education-dev-stripe-secret-key" \
+  --name "${PROJECT_NAME}-dev-stripe-secret-key" \
   --secret-string "sk_test_YOUR_TEST_KEY" \
   --region us-east-1
 ```
@@ -307,9 +345,12 @@ aws secretsmanager create-secret \
 ```bash
 export ENVIRONMENT="prod"
 
+# Set project name (or use default)
+export PROJECT_NAME="${PROJECT_NAME:-eislett-education}"
+
 # Use Stripe live mode keys (sk_live_...)
 aws secretsmanager create-secret \
-  --name "eislett-education-prod-stripe-secret-key" \
+  --name "${PROJECT_NAME}-prod-stripe-secret-key" \
   --secret-string "sk_live_YOUR_LIVE_KEY" \
   --region us-east-1
 ```
@@ -321,8 +362,11 @@ aws secretsmanager create-secret \
 To update an existing secret:
 
 ```bash
+# Set project name (or use default)
+export PROJECT_NAME="${PROJECT_NAME:-eislett-education}"
+
 aws secretsmanager update-secret \
-  --secret-id "eislett-education-${ENVIRONMENT}-stripe-secret-key" \
+  --secret-id "${PROJECT_NAME}-${ENVIRONMENT}-stripe-secret-key" \
   --secret-string "sk_test_NEW_KEY_HERE" \
   --region us-east-1
 ```
@@ -333,7 +377,7 @@ aws secretsmanager update-secret \
 
 #### Secret Not Found Error
 
-If you see: `Secret "eislett-education-{env}-stripe-secret-key" not found`
+If you see: `Secret "{project-name}-{env}-stripe-secret-key" not found`
 
 1. Verify the secret name matches exactly (case-sensitive)
 2. Check the environment variable matches your secret name
@@ -463,11 +507,19 @@ curl -X POST https://api.example.com/stripe/payment-intent \
 
 ### Secret Names by Environment
 
+**Format**: `{project-name}-{environment}-{secret-type}`
+
+Where `{project-name}` comes from GitHub variable `PROJECT_NAME` (defaults to `eislett-education`).
+
 | Environment | Stripe Secret Key | Webhook Secret | JWT Secret |
 |------------|-------------------|----------------|------------|
-| **dev** | `eislett-education-dev-stripe-secret-key` | `eislett-education-dev-stripe-webhook-secret` | `eislett-education-dev-jwt-access-token-secret` |
-| **staging** | `eislett-education-staging-stripe-secret-key` | `eislett-education-staging-stripe-webhook-secret` | `eislett-education-staging-jwt-access-token-secret` |
-| **prod** | `eislett-education-prod-stripe-secret-key` | `eislett-education-prod-stripe-webhook-secret` | `eislett-education-prod-jwt-access-token-secret` |
+| **dev** | `{project-name}-dev-stripe-secret-key` | `{project-name}-dev-stripe-webhook-secret` | `{project-name}-dev-jwt-access-token-secret` |
+| **staging** | `{project-name}-staging-stripe-secret-key` | `{project-name}-staging-stripe-webhook-secret` | `{project-name}-staging-jwt-access-token-secret` |
+| **prod** | `{project-name}-prod-stripe-secret-key` | `{project-name}-prod-stripe-webhook-secret` | `{project-name}-prod-jwt-access-token-secret` |
+
+**Example** (with default `eislett-education`):
+- `eislett-education-dev-stripe-secret-key`
+- `eislett-education-prod-stripe-webhook-secret`
 
 ### Where to Find Stripe Keys
 
@@ -482,28 +534,31 @@ curl -X POST https://api.example.com/stripe/payment-intent \
 ### Common Commands
 
 ```bash
+# Set project name (or use default)
+export PROJECT_NAME="${PROJECT_NAME:-eislett-education}"
+
 # Create a secret (replace {env} and values)
 aws secretsmanager create-secret \
-  --name "eislett-education-{env}-stripe-secret-key" \
+  --name "${PROJECT_NAME}-{env}-stripe-secret-key" \
   --secret-string "sk_test_YOUR_KEY" \
   --region us-east-1
 
 # Update a secret
 aws secretsmanager update-secret \
-  --secret-id "eislett-education-{env}-stripe-secret-key" \
+  --secret-id "${PROJECT_NAME}-{env}-stripe-secret-key" \
   --secret-string "sk_test_NEW_KEY" \
   --region us-east-1
 
 # Read a secret (for verification)
 aws secretsmanager get-secret-value \
-  --secret-id "eislett-education-{env}-stripe-secret-key" \
+  --secret-id "${PROJECT_NAME}-{env}-stripe-secret-key" \
   --region us-east-1 \
   --query SecretString \
   --output text
 
 # List all secrets for this service
 aws secretsmanager list-secrets \
-  --filters Key=name,Values=eislett-education-{env}-stripe \
+  --filters Key=name,Values=${PROJECT_NAME}-{env}-stripe \
   --region us-east-1
 ```
 

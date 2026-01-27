@@ -20,3 +20,9 @@ variable "jwt_access_token_secret" {
     description = "JWT access token secret for verifying tokens"
     sensitive = true
 }
+
+variable "project_name" {
+    type = string
+    description = "Project name prefix for resource naming (e.g., 'eislett-education')"
+    default = "eislett-education"
+}

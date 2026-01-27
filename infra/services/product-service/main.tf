@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     # Backend configuration is provided via -backend-config flags during terraform init
-    # to support dynamic environment-based naming: eislett-education-[environment]-[service-name]-...
+    # to support dynamic environment-based naming: [project-name]-[environment]-[service-name]-...
     bucket         = "placeholder" # Set via -backend-config
     key            = "placeholder" # Set via -backend-config
     region         = "us-east-1"   # Set via -backend-config
@@ -44,7 +44,7 @@ data "aws_region" "current" {}
 
 # DynamoDB Table for Products
 resource "aws_dynamodb_table" "products" {
-  name         = "eislett-education-${var.environment}-products"
+  name         = "${var.project_name}-${var.environment}-products"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "PK"
   range_key    = "SK"

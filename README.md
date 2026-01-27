@@ -1,6 +1,42 @@
-# Eislett Education Payment Service
+# Payment Service Platform
 
-A serverless microservices platform for managing products, pricing, entitlements, and billing events in an education payment system. Built with AWS Lambda, API Gateway, DynamoDB, SNS, and SQS.
+A serverless microservices platform for managing products, pricing, entitlements, and billing events in a payment system. Built with AWS Lambda, API Gateway, DynamoDB, SNS, and SQS.
+
+## Configuration
+
+### Project Name
+
+All AWS resources (DynamoDB tables, S3 buckets, SNS topics, Secrets Manager secrets, etc.) are prefixed with a configurable project name. This allows you to customize resource naming for your organization and avoid naming conflicts.
+
+**To configure the project name:**
+
+1. Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions** → **Variables**
+2. Click **New repository variable**
+3. Add:
+   - **Name**: `PROJECT_NAME`
+   - **Value**: Your project name (e.g., `my-company`, `acme-corp`, `eislett-education`)
+   - **Visibility**: Repository (or Organization if you want to share across repos)
+4. Click **Add variable**
+
+**Default**: If `PROJECT_NAME` is not set, it defaults to `eislett-education`.
+
+**Resource naming format**: `{project-name}-{environment}-{resource-type}`
+
+**Examples**:
+- With default (`eislett-education`): 
+  - DynamoDB: `eislett-education-dev-products`
+  - S3: `eislett-education-dev-product-service-state`
+  - Secrets: `eislett-education-dev-stripe-secret-key`
+- With custom (`my-company`):
+  - DynamoDB: `my-company-dev-products`
+  - S3: `my-company-dev-product-service-state`
+  - Secrets: `my-company-dev-stripe-secret-key`
+
+**Important Notes**:
+- The project name is used in **all** Terraform resource names
+- Changing the project name will create **new** resources (old ones won't be automatically renamed)
+- Ensure all team members use the same `PROJECT_NAME` value
+- The project name must be valid for AWS resource naming (lowercase, alphanumeric, hyphens only)
 
 ## Table of Contents
 
@@ -438,17 +474,21 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) automatically:
 ### Manual Deployment
 
 ```bash
+# Set project name (or use default)
+export PROJECT_NAME="${PROJECT_NAME:-eislett-education}"
+
 # Bootstrap Terraform backend (first time only)
 cd infra/services/product-service
 terraform init \
-  -backend-config="bucket=eislett-education-dev-product-service-state" \
+  -backend-config="bucket=${PROJECT_NAME}-dev-product-service-state" \
   -backend-config="key=tf-infra/dev.tfstate" \
   -backend-config="region=us-east-1" \
-  -backend-config="dynamodb_table=eislett-education-dev-product-service-state-locking" \
+  -backend-config="dynamodb_table=${PROJECT_NAME}-dev-product-service-state-locking" \
   -backend-config="encrypt=true"
 
 # Deploy service
 terraform apply \
+  -var="project_name=${PROJECT_NAME}" \
   -var="environment=dev" \
   -var="state_bucket_name=..." \
   -var="state_region=us-east-1" \

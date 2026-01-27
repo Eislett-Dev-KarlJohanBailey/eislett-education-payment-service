@@ -47,12 +47,12 @@ The service requires the following environment variables:
 
 ```bash
 # DynamoDB Configuration
-PRODUCTS_TABLE=eislett-education-dev-products
-ENTITLEMENTS_TABLE=eislett-education-dev-entitlements
-PROCESSED_EVENTS_TABLE=eislett-education-dev-entitlement-processor-events
+PRODUCTS_TABLE={project-name}-dev-products
+ENTITLEMENTS_TABLE={project-name}-dev-entitlements
+PROCESSED_EVENTS_TABLE={project-name}-dev-entitlement-processor-events
 
 # SNS Configuration
-ENTITLEMENT_UPDATES_TOPIC_ARN=arn:aws:sns:us-east-1:123456789012:eislett-education-dev-entitlement-updates
+ENTITLEMENT_UPDATES_TOPIC_ARN=arn:aws:sns:us-east-1:123456789012:{project-name}-dev-entitlement-updates
 
 # AWS Configuration (if running locally)
 AWS_REGION=us-east-1
@@ -128,7 +128,7 @@ These events are skipped (no entitlement changes):
 
 The service maintains idempotency by tracking processed events in a DynamoDB table:
 
-- **Table**: `eislett-education-{env}-entitlement-processor-events`
+- **Table**: `{project-name}-{env}-entitlement-processor-events`
 - **Key**: `eventId` (from billing event metadata)
 - **TTL**: 30 days (automatic cleanup)
 - **Status**: `success`, `failed`, or `skipped`
@@ -192,13 +192,14 @@ The service is deployed using Terraform with the following resources:
 ```bash
 cd infra/services/entitlement-processor-service
 terraform init \
-  -backend-config="bucket=eislett-education-{environment}-entitlement-processor-service-state" \
+  -backend-config="bucket={project-name}-{environment}-entitlement-processor-service-state" \
   -backend-config="key=tf-infra/{environment}.tfstate" \
   -backend-config="region=us-east-1" \
-  -backend-config="dynamodb_table=eislett-education-{environment}-entitlement-processor-service-state-locking" \
+  -backend-config="dynamodb_table={project-name}-{environment}-entitlement-processor-service-state-locking" \
   -backend-config="encrypt=true"
 
 terraform apply \
+  -var="project_name={project-name}" \
   -var="environment={environment}" \
   -var="state_bucket_name={state-bucket}" \
   -var="state_region=us-east-1" \
@@ -253,7 +254,7 @@ Other services can subscribe to the `entitlement-updates` SNS topic to receive n
 
 ```bash
 aws sns subscribe \
-  --topic-arn arn:aws:sns:us-east-1:123456789012:eislett-education-dev-entitlement-updates \
+  --topic-arn arn:aws:sns:us-east-1:123456789012:{project-name}-dev-entitlement-updates \
   --protocol sqs \
   --notification-endpoint arn:aws:sqs:us-east-1:123456789012:your-queue
 ```

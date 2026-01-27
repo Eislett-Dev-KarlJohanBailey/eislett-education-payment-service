@@ -45,7 +45,7 @@ The service requires the following environment variables:
 
 ```bash
 # DynamoDB Configuration
-ENTITLEMENTS_TABLE=eislett-education-dev-entitlements
+ENTITLEMENTS_TABLE={project-name}-dev-entitlements
 
 # JWT Configuration
 JWT_ACCESS_TOKEN_SECRET=your-jwt-secret-key-here
@@ -61,7 +61,7 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 **For Local Development:**
 ```bash
 # Create a .env file in the service root
-echo "ENTITLEMENTS_TABLE=eislett-education-dev-entitlements" > .env
+echo "ENTITLEMENTS_TABLE={project-name}-dev-entitlements" > .env
 echo "JWT_ACCESS_TOKEN_SECRET=your-secret-key" >> .env
 ```
 
@@ -274,7 +274,7 @@ The token must be signed with the secret specified in `JWT_ACCESS_TOKEN_SECRET`.
 The service is deployed using Terraform. The infrastructure configuration is located in `infra/services/access-service/`.
 
 **Key Resources:**
-- DynamoDB table: `eislett-education-{environment}-entitlements`
+- DynamoDB table: `{project-name}-{environment}-entitlements`
 - Lambda function: `access-service`
 - API Gateway integration: `/access` endpoint
 - IAM role with DynamoDB read permissions
@@ -291,10 +291,10 @@ The service is deployed using Terraform. The infrastructure configuration is loc
    ```bash
    cd infra/services/access-service
    terraform init \
-     -backend-config="bucket=eislett-education-{environment}-access-service-state" \
+     -backend-config="bucket={project-name}-{environment}-access-service-state" \
      -backend-config="key=tf-infra/{environment}.tfstate" \
      -backend-config="region=us-east-1" \
-     -backend-config="dynamodb_table=eislett-education-{environment}-access-service-state-locking" \
+     -backend-config="dynamodb_table={project-name}-{environment}-access-service-state-locking" \
      -backend-config="encrypt=true"
    
    terraform apply \

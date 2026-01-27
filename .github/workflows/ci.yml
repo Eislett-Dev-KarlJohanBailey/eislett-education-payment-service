@@ -62,6 +62,13 @@ jobs:
             echo "environment=dev" >> $GITHUB_OUTPUT
           fi
 
+      - name: Set project name
+        id: project
+        run: |
+          PROJECT_NAME="${{ vars.PROJECT_NAME || 'eislett-education' }}"
+          echo "project_name=${PROJECT_NAME}" >> $GITHUB_OUTPUT
+          echo "Using project name: ${PROJECT_NAME}"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -71,9 +78,10 @@ jobs:
 
       - name: Bootstrap Terraform backend
         run: |
+          PROJECT_NAME="${{ steps.project.outputs.project_name }}"
           for service in product-service pricing-service access-service entitlement-processor-service stripe-service; do
-            export BUCKET="eislett-education-${{ steps.env.outputs.environment }}-${service}-state"
-            export TABLE="eislett-education-${{ steps.env.outputs.environment }}-${service}-state-locking"
+            export BUCKET="${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state"
+            export TABLE="${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state-locking"
             export AWS_REGION="us-east-1"
             bash bin/bootstrap_backend.sh
           done
@@ -88,14 +96,16 @@ jobs:
               echo "Error: function.zip not found at services/$service/function.zip"
               exit 1
             fi
+            PROJECT_NAME="${{ steps.project.outputs.project_name }}"
             terraform -chdir=infra/services/$service init \
-              -backend-config="bucket=eislett-education-${{ steps.env.outputs.environment }}-${service}-state" \
+              -backend-config="bucket=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state" \
               -backend-config="key=tf-infra/${{ steps.env.outputs.environment }}.tfstate" \
               -backend-config="region=us-east-1" \
-              -backend-config="dynamodb_table=eislett-education-${{ steps.env.outputs.environment }}-${service}-state-locking" \
+              -backend-config="dynamodb_table=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state-locking" \
               -backend-config="encrypt=true"
             if [ "$service" == "access-service" ]; then
               terraform -chdir=infra/services/$service apply -auto-approve \
+                -var="project_name=${PROJECT_NAME}" \
                 -var="environment=${{ steps.env.outputs.environment }}" \
                 -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
                 -var="state_region=${{ secrets.TF_STATE_REGION }}" \
@@ -103,6 +113,7 @@ jobs:
                 -var="jwt_access_token_secret=${{ secrets.JWT_ACCESS_TOKEN_SECRET }}"
             else
               terraform -chdir=infra/services/$service apply -auto-approve \
+                -var="project_name=${PROJECT_NAME}" \
                 -var="environment=${{ steps.env.outputs.environment }}" \
                 -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
                 -var="state_region=${{ secrets.TF_STATE_REGION }}" \
@@ -116,13 +127,15 @@ jobs:
             echo "Error: function.zip not found at services/$service/function.zip"
             exit 1
           fi
+          PROJECT_NAME="${{ steps.project.outputs.project_name }}"
           terraform -chdir=infra/services/$service init \
-            -backend-config="bucket=eislett-education-${{ steps.env.outputs.environment }}-${service}-state" \
+            -backend-config="bucket=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state" \
             -backend-config="key=tf-infra/${{ steps.env.outputs.environment }}.tfstate" \
             -backend-config="region=us-east-1" \
-            -backend-config="dynamodb_table=eislett-education-${{ steps.env.outputs.environment }}-${service}-state-locking" \
+            -backend-config="dynamodb_table=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state-locking" \
             -backend-config="encrypt=true"
           terraform -chdir=infra/services/$service apply -auto-approve \
+            -var="project_name=${PROJECT_NAME}" \
             -var="environment=${{ steps.env.outputs.environment }}" \
             -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
             -var="state_region=${{ secrets.TF_STATE_REGION }}" \
@@ -135,12 +148,13 @@ jobs:
             exit 1
           fi
           terraform -chdir=infra/services/$service init \
-            -backend-config="bucket=eislett-education-${{ steps.env.outputs.environment }}-${service}-state" \
+            -backend-config="bucket=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state" \
             -backend-config="key=tf-infra/${{ steps.env.outputs.environment }}.tfstate" \
             -backend-config="region=us-east-1" \
-            -backend-config="dynamodb_table=eislett-education-${{ steps.env.outputs.environment }}-${service}-state-locking" \
+            -backend-config="dynamodb_table=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state-locking" \
             -backend-config="encrypt=true"
           terraform -chdir=infra/services/$service apply -auto-approve \
+            -var="project_name=${PROJECT_NAME}" \
             -var="environment=${{ steps.env.outputs.environment }}" \
             -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
             -var="state_region=${{ secrets.TF_STATE_REGION }}" \

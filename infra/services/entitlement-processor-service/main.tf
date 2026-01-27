@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     # Backend configuration is provided via -backend-config flags during terraform init
-    # to support dynamic environment-based naming: eislett-education-[environment]-[service-name]-...
+    # to support dynamic environment-based naming: [project-name]-[environment]-[service-name]-...
     bucket         = "placeholder" # Set via -backend-config
     key            = "placeholder" # Set via -backend-config
     region         = "us-east-1"   # Set via -backend-config
@@ -39,7 +39,7 @@ data "terraform_remote_state" "product_service" {
   backend = "s3"
 
   config = {
-    bucket = "eislett-education-${var.environment}-product-service-state"
+    bucket = "${var.project_name}-${var.environment}-product-service-state"
     key    = "tf-infra/${var.environment}.tfstate"
     region = "us-east-1"
   }
@@ -49,7 +49,7 @@ data "terraform_remote_state" "access_service" {
   backend = "s3"
 
   config = {
-    bucket = "eislett-education-${var.environment}-access-service-state"
+    bucket = "${var.project_name}-${var.environment}-access-service-state"
     key    = "tf-infra/${var.environment}.tfstate"
     region = "us-east-1"
   }
@@ -60,7 +60,7 @@ data "aws_region" "current" {}
 
 # SNS Topic for Billing Events (Input)
 resource "aws_sns_topic" "billing_events" {
-  name = "eislett-education-${var.environment}-billing-events"
+  name = "${var.project_name}-${var.environment}-billing-events"
 
   tags = {
     Environment = var.environment
@@ -71,7 +71,7 @@ resource "aws_sns_topic" "billing_events" {
 
 # SNS Topic for Entitlement Updates (Output)
 resource "aws_sns_topic" "entitlement_updates" {
-  name = "eislett-education-${var.environment}-entitlement-updates"
+  name = "${var.project_name}-${var.environment}-entitlement-updates"
 
   tags = {
     Environment = var.environment
@@ -82,7 +82,7 @@ resource "aws_sns_topic" "entitlement_updates" {
 
 # SQS Dead Letter Queue
 resource "aws_sqs_queue" "entitlement_processor_dlq" {
-  name = "eislett-education-${var.environment}-entitlement-processor-dlq"
+  name = "${var.project_name}-${var.environment}-entitlement-processor-dlq"
 
   tags = {
     Environment = var.environment
@@ -93,7 +93,7 @@ resource "aws_sqs_queue" "entitlement_processor_dlq" {
 
 # SQS Queue for Entitlement Processor
 resource "aws_sqs_queue" "entitlement_processor_queue" {
-  name                       = "eislett-education-${var.environment}-entitlement-processor-queue"
+  name                       = "${var.project_name}-${var.environment}-entitlement-processor-queue"
   visibility_timeout_seconds = 300  # 5 minutes
   message_retention_seconds  = 1209600  # 14 days
   receive_wait_time_seconds  = 20  # Long polling
@@ -143,7 +143,7 @@ resource "aws_sns_topic_subscription" "billing_events_to_sqs" {
 
 # DynamoDB Table for Processed Events (Idempotency)
 resource "aws_dynamodb_table" "processed_events" {
-  name         = "eislett-education-${var.environment}-entitlement-processor-events"
+  name         = "${var.project_name}-${var.environment}-entitlement-processor-events"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "eventId"
 
