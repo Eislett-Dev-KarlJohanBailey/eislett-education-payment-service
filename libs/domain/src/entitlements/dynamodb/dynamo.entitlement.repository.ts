@@ -93,6 +93,7 @@ import { EntitlementUsage } from "../domain/entities/entitlement-usage.entity";
               limit: entitlement.usage.limit,
               used: entitlement.usage.used,
               resetAt: entitlement.usage.resetAt?.toISOString(),
+              resetStrategy: entitlement.usage.resetStrategy,
             }
           : undefined,
       };
@@ -112,7 +113,8 @@ import { EntitlementUsage } from "../domain/entities/entitlement-usage.entity";
               item.usage.used,
               item.usage.resetAt
                 ? new Date(item.usage.resetAt)
-                : undefined
+                : undefined,
+              item.usage.resetStrategy
             )
           : undefined
       );

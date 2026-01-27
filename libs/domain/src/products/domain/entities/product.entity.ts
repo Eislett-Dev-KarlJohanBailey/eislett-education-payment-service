@@ -2,6 +2,7 @@ import { DomainError } from "../errors/domain.error";
 import { EntitlementKey } from "../value-objects/entitlement-key.vo";
 import { ProductType } from "../value-objects/product-type.vo";
 import { UsageLimit } from "../value-objects/useage-limit.vo";
+import { AddonConfig } from "../value-objects/addon-config.vo";
 
 export interface ProductProps {
     productId: string;
@@ -13,7 +14,8 @@ export interface ProductProps {
   
     usageLimits?: UsageLimit[];
   
-    addons?: string[]; // productIds of add-ons
+    addons?: string[]; // productIds of add-ons (legacy - use addonConfigs for new products)
+    addonConfigs?: AddonConfig[]; // Enhanced add-on configuration
   
     providers?: Record<string, string>; // provider name -> providerId (e.g., "stripe" -> "prod_xxx", "paypal" -> "PP-xxx")
   
@@ -31,6 +33,7 @@ export interface ProductProps {
     private _entitlements: EntitlementKey[];
     private _usageLimits: UsageLimit[];
     private _addons: string[];
+    private _addonConfigs: AddonConfig[];
     private _providers: Record<string, string>;
     private _isActive: boolean;
     private _createdAt: Date;
@@ -44,6 +47,7 @@ export interface ProductProps {
       this._entitlements = props.entitlements;
       this._usageLimits = props.usageLimits ?? [];
       this._addons = props.addons ?? [];
+      this._addonConfigs = props.addonConfigs ?? [];
       this._providers = props.providers ?? {};
       this._isActive = props.isActive;
       this._createdAt = props.createdAt;
@@ -90,6 +94,10 @@ export interface ProductProps {
   
     get addons(): string[] {
       return [...this._addons];
+    }
+
+    get addonConfigs(): AddonConfig[] {
+      return [...this._addonConfigs];
     }
   
     get providers(): Record<string, string> {
@@ -166,6 +174,53 @@ export interface ProductProps {
   
       if (this._addons.includes(productId)) return;
       this._addons.push(productId);
+      this.touch();
+    }
+
+    addAddonConfig(config: AddonConfig): void {
+      if (this._type !== ProductType.SUBSCRIPTION) {
+        throw new DomainError("Only subscription products can have add-ons");
+      }
+
+      // Check for conflicts
+      if (config.conflicts) {
+        const existingAddonIds = this._addonConfigs.map(c => c.productId);
+        const hasConflict = config.conflicts.some(conflictId => existingAddonIds.includes(conflictId));
+        if (hasConflict) {
+          throw new DomainError(`Add-on ${config.productId} conflicts with existing add-ons`);
+        }
+      }
+
+      // Check if already exists
+      const exists = this._addonConfigs.find(c => c.productId === config.productId);
+      if (exists) {
+        throw new DomainError(`Add-on configuration for ${config.productId} already exists`);
+      }
+
+      // Validate dependencies
+      if (config.dependencies) {
+        const existingAddonIds = this._addonConfigs.map(c => c.productId);
+        const missingDeps = config.dependencies.filter(dep => !existingAddonIds.includes(dep));
+        if (missingDeps.length > 0) {
+          throw new DomainError(`Add-on ${config.productId} requires dependencies: ${missingDeps.join(", ")}`);
+        }
+      }
+
+      this._addonConfigs.push(config);
+      // Also add to legacy addons array for backward compatibility
+      if (!this._addons.includes(config.productId)) {
+        this._addons.push(config.productId);
+      }
+      this.touch();
+    }
+
+    removeAddonConfig(productId: string): void {
+      this._addonConfigs = this._addonConfigs.filter(c => c.productId !== productId);
+      // Remove from legacy array if not referenced by other configs
+      const stillReferenced = this._addonConfigs.some(c => c.productId === productId);
+      if (!stillReferenced) {
+        this._addons = this._addons.filter(id => id !== productId);
+      }
       this.touch();
     }
   

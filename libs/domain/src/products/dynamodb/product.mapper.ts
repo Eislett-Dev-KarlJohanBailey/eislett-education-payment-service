@@ -18,6 +18,7 @@ export class ProductMapper {
       entitlements: product.entitlements,
       usageLimits: product.usageLimits,
       addons: product.addons,
+      addonConfigs: product.addonConfigs,
       providers: product.providers,
       isActive: product.isActive,
       createdAt: product.createdAt.toISOString(),
@@ -34,6 +35,7 @@ export class ProductMapper {
       entitlements: item.entitlements,
       usageLimits: item.usageLimits,
       addons: item.addons,
+      addonConfigs: item.addonConfigs,
       providers: item.providers,
       isActive: item.isActive
     });
