@@ -19,4 +19,22 @@ export const ENTITLEMENT_REGISTRY = {
     roles: [EntitlementRole.LEARNER],
     usageBased: true,
   },
+
+  [EntitlementKey.SUBJECT_ACCESS]: {
+    description: "Access to subject",
+    roles: [EntitlementRole.LEARNER, EntitlementRole.EDUCATOR],
+    usageBased: true,
+  },
+
+  [EntitlementKey.QUESTION_GENERATION]: {
+    description: "Access to question generation",
+    roles: [EntitlementRole.LEARNER, EntitlementRole.EDUCATOR],
+    usageBased: true,
+  },
+
+  [EntitlementKey.AI_TUTOR_ACCESS]: {
+    description: "Access to AI tutor",
+    roles: [EntitlementRole.LEARNER],
+    usageBased: true,
+  },
 } as const;
