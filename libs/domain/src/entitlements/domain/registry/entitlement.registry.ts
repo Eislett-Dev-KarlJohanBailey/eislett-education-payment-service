@@ -2,26 +2,20 @@ import { EntitlementKey } from "../value-objects/entitlement-key.vo";
 import { EntitlementRole } from "../value-objects/entitlement-role.vo";
 
 export const ENTITLEMENT_REGISTRY = {
-  [EntitlementKey.ACCESS_DASHBOARD]: {
-    description: "Access to main dashboard",
+  [EntitlementKey.ADVANCED_ANALYTICS]: {
+    description: "Access to advanced analytics",
     roles: [EntitlementRole.LEARNER, EntitlementRole.EDUCATOR],
     usageBased: false,
   },
 
-  [EntitlementKey.ACCESS_ANALYTICS]: {
-    description: "Advanced analytics dashboard",
+  [EntitlementKey.CLASSROOM_MANAGEMENT]: {
+    description: "Access to classroom management",
     roles: [EntitlementRole.EDUCATOR],
-    usageBased: false,
-  },
-
-  [EntitlementKey.AI_TOKENS]: {
-    description: "AI token usage",
-    roles: [EntitlementRole.LEARNER, EntitlementRole.EDUCATOR],
     usageBased: true,
   },
 
-  [EntitlementKey.QUIZ_ATTEMPTS]: {
-    description: "Quiz attempts per billing period",
+  [EntitlementKey.CLASSROOM_ACCESS]: {
+    description: "Access to classroom",
     roles: [EntitlementRole.LEARNER],
     usageBased: true,
   },
