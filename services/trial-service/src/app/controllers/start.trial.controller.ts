@@ -6,10 +6,14 @@ export class StartTrialController {
     private readonly useCase: StartTrialUseCase
   ) {}
 
-  handle = async (req: RequestContext & { user: { id: string; role?: string } }) => {
+  handle = async (req: RequestContext) => {
     const { productId, trialDurationHours } = req.body;
-    const userId = req.user.id;
-    const userRole = req.user.role;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+
+    if (!userId) {
+      throw new Error("User ID is required");
+    }
 
     if (!productId) {
       throw new Error("productId is required");
