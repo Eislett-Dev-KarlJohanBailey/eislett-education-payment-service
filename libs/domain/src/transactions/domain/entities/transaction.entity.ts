@@ -17,10 +17,10 @@ export class Transaction {
     public readonly status: TransactionStatus,
     public readonly amount: number,
     public readonly currency: string,
+    public readonly createdAt: Date,
     public readonly productId?: string,
     public readonly priceId?: string,
     public readonly subscriptionId?: string,
-    public readonly createdAt: Date,
     public readonly metadata?: Record<string, any> // Additional event-specific data
   ) {}
 
@@ -40,10 +40,10 @@ export class Transaction {
       status,
       amount,
       currency,
+      new Date(),
       payload.productId,
       payload.priceId,
       payload.subscriptionId,
-      new Date(),
       {
         eventId,
         failureCode: payload.failureCode,

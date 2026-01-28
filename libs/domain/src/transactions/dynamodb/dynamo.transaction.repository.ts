@@ -99,10 +99,10 @@ export class DynamoTransactionRepository implements TransactionRepository {
       item.status,
       item.amount,
       item.currency,
+      new Date(item.createdAt),
       item.productId,
       item.priceId,
       item.subscriptionId,
-      new Date(item.createdAt),
       item.metadata ? JSON.parse(item.metadata) : undefined
     );
   }
