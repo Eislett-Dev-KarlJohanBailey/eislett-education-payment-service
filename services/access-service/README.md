@@ -39,15 +39,40 @@ The service requires the following environment variables:
 ### Required
 
 - `ENTITLEMENTS_TABLE` - Name of the DynamoDB table storing entitlements
-- `JWT_ACCESS_TOKEN_SECRET` - Secret key for verifying JWT access tokens
+- `JWT_ACCESS_TOKEN_SECRET` - Secret key for verifying JWT access tokens (automatically retrieved from AWS Secrets Manager)
 
-### Example `.env` file
+### JWT Secret Configuration
+
+The JWT secret is automatically retrieved from **AWS Secrets Manager** during deployment. The secret name follows this format:
+
+**Format**: `{project-name}-{environment}-jwt-access-token-secret`
+
+**Examples**:
+- `eislett-education-dev-jwt-access-token-secret`
+- `eislett-education-prod-jwt-access-token-secret`
+
+**To create the secret in AWS Secrets Manager:**
+
+```bash
+# Set your project name and environment
+export PROJECT_NAME="${PROJECT_NAME:-eislett-education}"
+export ENVIRONMENT="dev"
+
+# Create the secret
+aws secretsmanager create-secret \
+  --name "${PROJECT_NAME}-${ENVIRONMENT}-jwt-access-token-secret" \
+  --description "JWT access token secret for ${ENVIRONMENT} environment" \
+  --secret-string "your-jwt-secret-key-here" \
+  --region us-east-1
+```
+
+### Example `.env` file (for local development)
 
 ```bash
 # DynamoDB Configuration
 ENTITLEMENTS_TABLE={project-name}-dev-entitlements
 
-# JWT Configuration
+# JWT Configuration (for local development only)
 JWT_ACCESS_TOKEN_SECRET=your-jwt-secret-key-here
 
 # AWS Configuration (if running locally)
@@ -66,7 +91,7 @@ echo "JWT_ACCESS_TOKEN_SECRET=your-secret-key" >> .env
 ```
 
 **For AWS Lambda:**
-Set environment variables in your Lambda function configuration or use AWS Systems Manager Parameter Store / AWS Secrets Manager for sensitive values like `JWT_ACCESS_TOKEN_SECRET`.
+The JWT secret is automatically retrieved from AWS Secrets Manager. No manual configuration needed. Ensure the secret exists in Secrets Manager with the correct name format.
 
 ## Getting Started
 
@@ -298,11 +323,11 @@ The service is deployed using Terraform. The infrastructure configuration is loc
      -backend-config="encrypt=true"
    
    terraform apply \
+     -var="project_name={project-name}" \
      -var="environment={environment}" \
      -var="state_bucket_name={state-bucket}" \
      -var="state_region=us-east-1" \
-     -var="state_bucket_key={state-key}" \
-     -var="jwt_access_token_secret={jwt-secret}"
+     -var="state_bucket_key={state-key}"
    ```
 
 ### CI/CD Deployment
@@ -379,7 +404,7 @@ Monitor the following metrics:
 
 ## Security Considerations
 
-1. **JWT Secret**: Store `JWT_ACCESS_TOKEN_SECRET` securely using AWS Secrets Manager or Parameter Store
+1. **JWT Secret**: Ensure the JWT secret exists in AWS Secrets Manager with the name `{project-name}-{environment}-jwt-access-token-secret`
 2. **Token Validation**: All requests require valid JWT tokens
 3. **Least Privilege**: Lambda IAM role has minimal DynamoDB read permissions
 4. **No User Input**: The endpoint doesn't accept user input, reducing attack surface

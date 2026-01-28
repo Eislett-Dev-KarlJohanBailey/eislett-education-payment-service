@@ -42,6 +42,22 @@ data "terraform_remote_state" "foundation" {
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+# Get JWT secret from AWS Secrets Manager
+data "aws_secretsmanager_secret" "jwt_access_token_secret" {
+  name = "${var.project_name}-${var.environment}-jwt-access-token-secret"
+}
+
+data "aws_secretsmanager_secret_version" "jwt_access_token_secret" {
+  secret_id = data.aws_secretsmanager_secret.jwt_access_token_secret.id
+}
+
+locals {
+  jwt_access_token_secret = try(
+    jsondecode(data.aws_secretsmanager_secret_version.jwt_access_token_secret.secret_string)["key"],
+    data.aws_secretsmanager_secret_version.jwt_access_token_secret.secret_string
+  )
+}
+
 # DynamoDB Table for Entitlements
 resource "aws_dynamodb_table" "entitlements" {
   name         = "${var.project_name}-${var.environment}-entitlements"
@@ -83,6 +99,27 @@ module "access_service_iam_role" {
   }
 }
 
+# Additional IAM Policy for Secrets Manager
+resource "aws_iam_role_policy" "secrets_manager" {
+  name = "access-service-secrets-manager-${var.environment}"
+  role = module.access_service_iam_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [
+          data.aws_secretsmanager_secret.jwt_access_token_secret.arn
+        ]
+      }
+    ]
+  })
+}
+
 module "access_service_lambda" {
   source = "../../modules/lambda"
 
@@ -94,7 +131,7 @@ module "access_service_lambda" {
 
   environment_variables = {
     ENTITLEMENTS_TABLE      = aws_dynamodb_table.entitlements.name
-    JWT_ACCESS_TOKEN_SECRET = var.jwt_access_token_secret
+    JWT_ACCESS_TOKEN_SECRET = local.jwt_access_token_secret
   }
 }
 

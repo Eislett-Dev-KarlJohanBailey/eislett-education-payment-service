@@ -109,8 +109,7 @@ jobs:
                 -var="environment=${{ steps.env.outputs.environment }}" \
                 -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
                 -var="state_region=${{ secrets.TF_STATE_REGION }}" \
-                -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}" \
-                -var="jwt_access_token_secret=${{ secrets.JWT_ACCESS_TOKEN_SECRET }}"
+                -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
             else
               terraform -chdir=infra/services/$service apply -auto-approve \
                 -var="project_name=${PROJECT_NAME}" \
