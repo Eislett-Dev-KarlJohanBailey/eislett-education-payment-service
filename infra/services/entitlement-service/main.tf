@@ -55,19 +55,19 @@ data "terraform_remote_state" "access_service" {
   }
 }
 
-# Optional: Dunning service remote state (may not exist on first deployment)
-data "terraform_remote_state" "dunning_service" {
-  backend = "s3"
-
-  config = {
-    bucket = "${var.project_name}-${var.environment}-dunning-service-state"
-    key    = "tf-infra/${var.environment}.tfstate"
-    region = "us-east-1"
-  }
-}
+# Note: Dunning service remote state is not referenced here to avoid dependency issues
+# The DUNNING_TABLE environment variable is optional and will be set manually after dunning-service is deployed
+# IAM permissions for dunning table are also optional and can be added later
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
+
+# Dunning table is looked up by name (using libs/domain), so we construct the ARN
+# Format: arn:aws:dynamodb:region:account-id:table/table-name
+locals {
+  dunning_table_name = "${var.project_name}-${var.environment}-dunning"
+  dunning_table_arn  = "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${local.dunning_table_name}"
+}
 
 # SNS Topic for Billing Events (Input)
 resource "aws_sns_topic" "billing_events" {
@@ -190,13 +190,14 @@ module "entitlement_iam_role" {
   role_name = "entitlement-lambda-role-${var.environment}"
 
   # DynamoDB permissions
+  # Dunning table ARN is constructed from the table name (looked up by name using libs/domain)
   dynamodb_table_arns = concat([
     data.terraform_remote_state.product_service.outputs.products_table_arn,
     "${data.terraform_remote_state.product_service.outputs.products_table_arn}/index/*",
     data.terraform_remote_state.access_service.outputs.entitlements_table_arn,
     "${data.terraform_remote_state.access_service.outputs.entitlements_table_arn}/index/*",
     aws_dynamodb_table.processed_events.arn
-  ], try([data.terraform_remote_state.dunning_service.outputs.dunning_table_arn], []))
+  ], [local.dunning_table_arn]) # Dunning table for checking state before revocation
 
   tags = {
     Environment = var.environment
@@ -254,14 +255,13 @@ module "entitlement_lambda" {
   filename      = abspath("${path.cwd}/services/entitlement-service/function.zip")
   iam_role_arn  = module.entitlement_iam_role.role_arn
 
-  environment_variables = merge({
+  environment_variables = {
     PRODUCTS_TABLE                = data.terraform_remote_state.product_service.outputs.products_table_name
     ENTITLEMENTS_TABLE            = data.terraform_remote_state.access_service.outputs.entitlements_table_name
     PROCESSED_EVENTS_TABLE        = aws_dynamodb_table.processed_events.name
     ENTITLEMENT_UPDATES_TOPIC_ARN = aws_sns_topic.entitlement_updates.arn
-  }, try({
-    DUNNING_TABLE = data.terraform_remote_state.dunning_service.outputs.dunning_table_name
-  }, {}))
+    DUNNING_TABLE                 = local.dunning_table_name # Looked up by name using libs/domain
+  }
 }
 
 # Lambda Event Source Mapping (SQS Trigger)

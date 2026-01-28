@@ -33,25 +33,17 @@ data "terraform_remote_state" "foundation" {
   }
 }
 
-data "terraform_remote_state" "entitlement_service" {
-  backend = "s3"
-
-  config = {
-    bucket = "${var.project_name}-${var.environment}-entitlement-service-state"
-    key    = "tf-infra/${var.environment}.tfstate"
-    region = "us-east-1"
-  }
+# Look up billing events SNS topic by name (created by entitlement-service but we don't need remote state)
+data "aws_sns_topic" "billing_events" {
+  name = "${var.project_name}-${var.environment}-billing-events"
 }
 
-data "terraform_remote_state" "access_service" {
-  backend = "s3"
-
-  config = {
-    bucket = "${var.project_name}-${var.environment}-access-service-state"
-    key    = "tf-infra/${var.environment}.tfstate"
-    region = "us-east-1"
-  }
+# Look up entitlement updates SNS topic by name (for publishing revocation events)
+data "aws_sns_topic" "entitlement_updates" {
+  name = "${var.project_name}-${var.environment}-entitlement-updates"
 }
+
+# No dependencies on other services - uses libs/domain for shared functionality
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
@@ -136,7 +128,7 @@ resource "aws_sqs_queue_policy" "dunning_queue_policy" {
         Resource = aws_sqs_queue.dunning_queue.arn
         Condition = {
           ArnEquals = {
-            "aws:SourceArn" = data.terraform_remote_state.entitlement_service.outputs.billing_events_topic_arn
+            "aws:SourceArn" = data.aws_sns_topic.billing_events.arn
           }
         }
       }
@@ -144,9 +136,9 @@ resource "aws_sqs_queue_policy" "dunning_queue_policy" {
   })
 }
 
-# SNS Subscription: SQS Queue subscribes to Billing Events Topic (from entitlement-service)
+# SNS Subscription: SQS Queue subscribes to Billing Events Topic
 resource "aws_sns_topic_subscription" "billing_events_to_dunning_sqs" {
-  topic_arn = data.terraform_remote_state.entitlement_service.outputs.billing_events_topic_arn
+  topic_arn = data.aws_sns_topic.billing_events.arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.dunning_queue.arn
 }
@@ -157,13 +149,10 @@ module "dunning_iam_role" {
 
   role_name = "dunning-lambda-role-${var.environment}"
 
-  # DynamoDB permissions
-  dynamodb_table_arns = concat([
+  # DynamoDB permissions - only dunning table (entitlements handled via events)
+  dynamodb_table_arns = [
     aws_dynamodb_table.dunning.arn
-  ], try([
-    data.terraform_remote_state.access_service.outputs.entitlements_table_arn,
-    "${data.terraform_remote_state.access_service.outputs.entitlements_table_arn}/index/*"
-  ], []))
+  ]
 
   tags = {
     Environment = var.environment
@@ -184,7 +173,7 @@ resource "aws_iam_role_policy" "sns_publish" {
         Action = [
           "sns:Publish"
         ]
-        Resource = data.terraform_remote_state.entitlement_service.outputs.entitlement_updates_topic_arn
+        Resource = data.aws_sns_topic.entitlement_updates.arn
       }
     ]
   })
@@ -242,12 +231,10 @@ module "dunning_lambda" {
   filename      = abspath("${path.cwd}/services/dunning-service/function.zip")
   iam_role_arn  = module.dunning_iam_role.role_arn
 
-  environment_variables = merge({
+  environment_variables = {
     DUNNING_TABLE                    = aws_dynamodb_table.dunning.name
-    ENTITLEMENT_UPDATES_TOPIC_ARN    = data.terraform_remote_state.entitlement_service.outputs.entitlement_updates_topic_arn
-  }, try({
-    ENTITLEMENTS_TABLE = data.terraform_remote_state.access_service.outputs.entitlements_table_name
-  }, {}))
+    ENTITLEMENT_UPDATES_TOPIC_ARN    = data.aws_sns_topic.entitlement_updates.arn
+  }
 }
 
 # Lambda Event Source Mapping (SQS Trigger)
@@ -270,13 +257,11 @@ module "dunning_api_lambda" {
   filename      = abspath("${path.cwd}/services/dunning-service/function.zip")
   iam_role_arn  = module.dunning_iam_role.role_arn
 
-  environment_variables = merge({
+  environment_variables = {
     DUNNING_TABLE                 = aws_dynamodb_table.dunning.name
     JWT_ACCESS_TOKEN_SECRET        = local.jwt_access_token_secret
-  }, try({
-    ENTITLEMENTS_TABLE = data.terraform_remote_state.access_service.outputs.entitlements_table_name
-    ENTITLEMENT_UPDATES_TOPIC_ARN = data.terraform_remote_state.entitlement_service.outputs.entitlement_updates_topic_arn
-  }, {}))
+    ENTITLEMENT_UPDATES_TOPIC_ARN = data.aws_sns_topic.entitlement_updates.arn
+  }
 }
 
 # API Gateway Integration

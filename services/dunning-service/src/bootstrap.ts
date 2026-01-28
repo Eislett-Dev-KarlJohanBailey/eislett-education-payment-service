@@ -1,6 +1,5 @@
 import {
   DynamoDunningRepository,
-  DynamoEntitlementRepository,
 } from "@libs/domain";
 import { ProcessBillingEventUseCase } from "./app/usecases/process.billing.event.usecase";
 import { GetBillingIssueUseCase } from "./app/usecases/get.billing.issue.usecase";
@@ -10,7 +9,6 @@ import { EntitlementEventPublisher } from "./infrastructure/event.publisher";
 export function bootstrap() {
   const dunningTableName = process.env.DUNNING_TABLE;
   const entitlementUpdatesTopicArn = process.env.ENTITLEMENT_UPDATES_TOPIC_ARN;
-  const entitlementsTableName = process.env.ENTITLEMENTS_TABLE; // Optional - for direct revocation
 
   if (!dunningTableName) {
     throw new Error("DUNNING_TABLE environment variable is not set");
@@ -21,21 +19,14 @@ export function bootstrap() {
 
   const dunningRepo = new DynamoDunningRepository(dunningTableName);
   const entitlementEventPublisher = new EntitlementEventPublisher();
-  
-  // Entitlement repository is optional - only used for direct revocation when suspending
-  const entitlementRepo = entitlementsTableName 
-    ? new DynamoEntitlementRepository(entitlementsTableName)
-    : undefined;
 
   const processBillingEventUseCase = new ProcessBillingEventUseCase(
     dunningRepo,
-    entitlementEventPublisher,
-    entitlementRepo
+    entitlementEventPublisher
   );
 
   const getBillingIssueUseCase = new GetBillingIssueUseCase(
     dunningRepo,
-    entitlementRepo,
     entitlementEventPublisher
   );
   const getBillingIssueController = new GetBillingIssueController(getBillingIssueUseCase);

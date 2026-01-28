@@ -3,8 +3,6 @@ import {
   DunningRepository,
   DunningRecord,
   DunningState,
-  EntitlementRepository,
-  EntitlementStatus,
 } from "@libs/domain";
 import { EntitlementEventPublisher } from "../../infrastructure/event.publisher";
 
@@ -19,8 +17,7 @@ const SubscriptionEventType = BillingEvent.SubscriptionEventType;
 export class ProcessBillingEventUseCase {
   constructor(
     private readonly dunningRepo: DunningRepository,
-    private readonly entitlementEventPublisher: EntitlementEventPublisher,
-    private readonly entitlementRepo?: EntitlementRepository // Optional - for direct revocation
+    private readonly entitlementEventPublisher: EntitlementEventPublisher
   ) {}
 
   async execute(event: BillingDomainEvent<any>): Promise<void> {
@@ -182,9 +179,9 @@ export class ProcessBillingEventUseCase {
       if (nextState !== currentState) {
         record.updateState(nextState);
 
-        // If transitioning to SUSPENDED, revoke all entitlements
+        // If transitioning to SUSPENDED, publish revocation event
+        // Entitlement service will handle the actual revocation
         if (nextState === DunningState.SUSPENDED) {
-          await this.revokeAllEntitlements(userId);
           await this.publishEntitlementRevocation(userId);
         }
 
@@ -195,27 +192,8 @@ export class ProcessBillingEventUseCase {
   }
 
   /**
-   * Revokes all entitlements for a user when account is suspended
-   */
-  private async revokeAllEntitlements(userId: string): Promise<void> {
-    if (!this.entitlementRepo) {
-      console.warn(`EntitlementRepository not available - cannot revoke entitlements for user ${userId}`);
-      return;
-    }
-
-    const entitlements = await this.entitlementRepo.findByUser(userId);
-    
-    for (const entitlement of entitlements) {
-      entitlement.status = EntitlementStatus.REVOKED;
-      entitlement.expiresAt = undefined;
-      await this.entitlementRepo.update(entitlement);
-    }
-    
-    console.log(`Revoked all entitlements for user ${userId} (non_payment - suspended)`);
-  }
-
-  /**
    * Publishes entitlement revocation event when account is suspended
+   * The entitlement service will handle the actual revocation after checking dunning state
    */
   private async publishEntitlementRevocation(userId: string): Promise<void> {
     const metadata = {

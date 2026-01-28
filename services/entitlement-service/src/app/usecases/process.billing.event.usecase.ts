@@ -472,21 +472,39 @@ export class ProcessBillingEventUseCase {
     immediate: boolean,
     expiresAt?: Date
   ): Promise<void> {
-    // Check dunning state before revoking
-    // Only revoke if dunning state is OK or SUSPENDED
-    // If in ACTION_REQUIRED, GRACE_PERIOD, or RESTRICTED, don't revoke yet
-    // This ensures entitlements are maintained during the dunning grace period
+    // Check dunning state before revoking (using libs/domain)
+    // Dunning timeline: ACTION_REQUIRED (Day 0) → GRACE_PERIOD (Day 1-3) → RESTRICTED (Day 4-7) → SUSPENDED (Day 8+)
+    // Only revoke if dunning state is OK (no billing issues) or SUSPENDED (8+ days, already suspended)
+    // If in ACTION_REQUIRED, GRACE_PERIOD, or RESTRICTED (Days 0-7), maintain access per 8-day grace period
+    // This ensures entitlements are maintained during the dunning grace period and only revoked after 8 days
     if (this.dunningRepo) {
       const dunningRecord = await this.dunningRepo.findByUserId(userId);
       if (dunningRecord) {
         const state = dunningRecord.state;
+        const daysSince = dunningRecord.getDaysSinceDetection();
+        
+        // Check if state should transition (in case dunning service hasn't processed it yet)
+        if (dunningRecord.shouldTransition()) {
+          const nextState = dunningRecord.getNextState();
+          if (nextState !== state) {
+            // State should have transitioned - use the next state for decision
+            if (nextState === DunningState.SUSPENDED || nextState === DunningState.OK) {
+              // Proceed with revocation if state should be SUSPENDED or OK
+            } else {
+              console.log(`Skipping entitlement revocation for user ${userId} - dunning state should be ${nextState} (${daysSince} days since detection). Access maintained per 8-day dunning timeline.`);
+              return;
+            }
+          }
+        }
+        
+        // Check current state
         if (state === DunningState.ACTION_REQUIRED || 
             state === DunningState.GRACE_PERIOD || 
             state === DunningState.RESTRICTED) {
-          console.log(`Skipping entitlement revocation for user ${userId} - dunning state is ${state}. Access maintained per dunning timeline.`);
-          return; // Don't revoke - dunning service will handle it when state becomes SUSPENDED
+          console.log(`Skipping entitlement revocation for user ${userId} - dunning state is ${state} (${daysSince} days since detection). Access maintained per 8-day dunning timeline.`);
+          return; // Don't revoke - maintain access during grace period (Days 0-7)
         }
-        // If SUSPENDED, proceed with revocation (dunning service already published revocation event)
+        // If SUSPENDED (Day 8+), proceed with revocation
         // If OK, proceed with revocation (normal subscription cancellation/expiration)
       }
     }
