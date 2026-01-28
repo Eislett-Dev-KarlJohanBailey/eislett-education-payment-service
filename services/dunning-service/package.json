@@ -8,7 +8,7 @@
     "build:watch": "tsc --watch",
     "clean": "rm -rf dist",
     "type-check": "tsc --noEmit",
-    "package": "esbuild src/handler/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js && esbuild src/handler/api-gateway/index.ts --bundle --platform=node --target=node20 --outfile=dist/api-gateway.js && zip -j function.zip dist/index.js dist/api-gateway.js",
+    "package": "esbuild src/handler/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js && zip -j function.zip dist/index.js",
     "deploy": "echo Deploying dunning-service..."
   },
   "keywords": [],
