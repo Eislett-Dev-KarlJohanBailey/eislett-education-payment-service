@@ -2,15 +2,19 @@ import Stripe from "stripe";
 import { WebhookIdempotencyRepository } from "../../infrastructure/webhook-idempotency.repository";
 import { BillingEventPublisher } from "../../infrastructure/event.publisher";
 import { StripeCustomerRepository } from "../../infrastructure/stripe-customer.repository";
+import { StripeClient } from "../../infrastructure/stripe.client";
 import {
   BillingEvent,
+  GetProductUseCase,
 } from "@libs/domain";
 
 export class HandleWebhookUseCase {
   constructor(
     private readonly idempotencyRepo: WebhookIdempotencyRepository,
     private readonly eventPublisher: BillingEventPublisher,
-    private readonly customerRepo: StripeCustomerRepository
+    private readonly customerRepo: StripeCustomerRepository,
+    private readonly stripeClient: StripeClient,
+    private readonly getProductUseCase: GetProductUseCase
   ) {}
 
   async execute(event: Stripe.Event): Promise<void> {
@@ -131,12 +135,15 @@ export class HandleWebhookUseCase {
       throw new Error(`Customer not found for Stripe customer ID: ${subscription.customer}`);
     }
 
+    // Resolve productId from metadata or fallback to Stripe product lookup
+    const productId = await this.resolveProductId(subscription);
+
     const billingEvent: BillingEvent.SubscriptionCreatedEvent = {
       type: BillingEvent.SubscriptionEventType.SUBSCRIPTION_CREATED,
       payload: {
         subscriptionId: subscription.id,
         userId: customer.userId,
-        productId: subscription.metadata.productId || "",
+        productId,
         priceId: subscription.items.data[0]?.price.id || subscription.metadata.priceId || "",
         status: subscription.status as any,
         currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
@@ -158,12 +165,15 @@ export class HandleWebhookUseCase {
       throw new Error(`Customer not found for Stripe customer ID: ${subscription.customer}`);
     }
 
+    // Resolve productId from metadata or fallback to Stripe product lookup
+    const productId = await this.resolveProductId(subscription);
+
     const billingEvent: BillingEvent.SubscriptionUpdatedEvent = {
       type: BillingEvent.SubscriptionEventType.SUBSCRIPTION_UPDATED,
       payload: {
         subscriptionId: subscription.id,
         userId: customer.userId,
-        productId: subscription.metadata.productId || "",
+        productId,
         priceId: subscription.items.data[0]?.price.id || subscription.metadata.priceId || "",
         status: subscription.status as any,
         currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
@@ -191,12 +201,15 @@ export class HandleWebhookUseCase {
       ? BillingEvent.SubscriptionEventType.SUBSCRIPTION_CANCELED
       : BillingEvent.SubscriptionEventType.SUBSCRIPTION_EXPIRED;
 
+    // Resolve productId from metadata or fallback to Stripe product lookup
+    const productId = await this.resolveProductId(subscription);
+
     const billingEvent = {
       type: eventType,
       payload: {
         subscriptionId: subscription.id,
         userId: customer.userId,
-        productId: subscription.metadata.productId || "",
+        productId,
         priceId: subscription.items.data[0]?.price.id || subscription.metadata.priceId || "",
         status: subscription.status as any,
         currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
@@ -224,5 +237,60 @@ export class HandleWebhookUseCase {
     }
 
     throw new Error(`Could not determine userId from payment intent ${paymentIntent.id}`);
+  }
+
+  /**
+   * Resolves the internal productId from subscription metadata or by looking up the Stripe product
+   * 
+   * Flow:
+   * 1. First, try to get productId from subscription.metadata (set via subscription_data.metadata in checkout)
+   * 2. If missing, retrieve the Stripe price from the subscription
+   * 3. Get the Stripe product from the price
+   * 4. Search for internal product where providers.stripe matches the Stripe product ID
+   * 
+   * @param subscription - Stripe subscription object
+   * @returns Internal productId or empty string if not found
+   */
+  private async resolveProductId(subscription: Stripe.Subscription): Promise<string> {
+    // Primary: Get from metadata (set during checkout session creation)
+    if (subscription.metadata?.productId) {
+      return subscription.metadata.productId;
+    }
+
+    // Fallback: Look up product by Stripe product ID
+    try {
+      const priceId = subscription.items.data[0]?.price.id;
+      if (!priceId) {
+        console.warn(`No price found in subscription ${subscription.id}, cannot resolve productId`);
+        return "";
+      }
+
+      // Retrieve Stripe price to get the product ID
+      const stripePrice = await this.stripeClient.retrievePrice(priceId);
+      const stripeProductId = typeof stripePrice.product === "string" 
+        ? stripePrice.product 
+        : stripePrice.product?.id;
+
+      if (!stripeProductId) {
+        console.warn(`No product found in Stripe price ${priceId}, cannot resolve productId`);
+        return "";
+      }
+
+      // Note: We would need a method to find products by provider.stripe value
+      // For now, we log a warning. In a future enhancement, we could:
+      // 1. Add a findByProvider method to ProductRepository
+      // 2. Or use a GSI on providers.stripe
+      // 3. Or scan/list products and filter by providers.stripe
+      console.warn(
+        `ProductId not found in subscription metadata for subscription ${subscription.id}. ` +
+        `Stripe product ID: ${stripeProductId}. ` +
+        `Consider adding subscription_data.metadata when creating checkout sessions.`
+      );
+
+      return "";
+    } catch (error) {
+      console.error(`Error resolving productId for subscription ${subscription.id}:`, error);
+      return "";
+    }
   }
 }

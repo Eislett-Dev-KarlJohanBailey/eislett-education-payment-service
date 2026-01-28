@@ -80,6 +80,11 @@ export class StripeClient {
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
       metadata: params.metadata || {},
+      // subscription_data.metadata ensures metadata is attached to the subscription when created
+      // This is critical for linking subscriptions back to internal products
+      subscription_data: {
+        metadata: params.metadata || {},
+      },
     });
   }
 

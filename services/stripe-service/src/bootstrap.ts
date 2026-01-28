@@ -43,7 +43,9 @@ export function bootstrap() {
   const handleWebhookUseCase = new HandleWebhookUseCase(
     idempotencyRepo,
     eventPublisher,
-    customerRepo
+    customerRepo,
+    stripeClient,
+    getProductUseCase
   );
 
   // Controllers
