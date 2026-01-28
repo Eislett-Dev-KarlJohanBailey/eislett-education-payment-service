@@ -190,9 +190,9 @@ When a billing event is received:
 
 ### Access Control
 
-- **Regular Users**: Can only view their own transactions
-- **Admin Users**: Can view all transactions across all users
-- **Unauthorized Access**: Returns 403 Forbidden if user tries to access another user's transactions
+- **Regular Users**: Can only view their own transactions (userId query parameter is ignored)
+- **Admin Users**: Can filter by `userId` query parameter to view any user's transactions
+- **Unauthorized Access**: Returns 403 Forbidden if non-admin user tries to filter by different userId
 
 ## DynamoDB Schema
 

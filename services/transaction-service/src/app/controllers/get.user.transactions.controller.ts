@@ -7,20 +7,24 @@ export class GetUserTransactionsController {
   ) {}
 
   handle = async (req: RequestContext) => {
-    const userId = req.query.userId || req.user?.id;
-    const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+    const requestingUserId = req.user?.id;
+    const userRole = req.user?.role;
+    const isAdmin = userRole === "ADMIN";
 
-    if (!userId) {
-      throw new Error("userId is required");
+    if (!requestingUserId) {
+      throw new Error("User ID is required");
     }
 
-    // Users can only view their own transactions unless they're admin
-    const requestingUserId = req.user?.id;
-    const isAdmin = req.user?.role === "ADMIN";
-
-    if (!isAdmin && userId !== requestingUserId) {
+    // Default to authenticated user's ID, but allow admins to filter by userId
+    let userId = requestingUserId;
+    if (isAdmin && req.query.userId) {
+      userId = req.query.userId;
+    } else if (!isAdmin && req.query.userId && req.query.userId !== requestingUserId) {
+      // Non-admin users cannot filter by different userId
       throw new Error("Unauthorized: You can only view your own transactions");
     }
+
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
 
     const transactions = await this.useCase.execute({ userId, limit });
 
