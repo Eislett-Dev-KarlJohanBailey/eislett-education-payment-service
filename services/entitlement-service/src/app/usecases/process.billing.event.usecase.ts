@@ -86,14 +86,22 @@ export class ProcessBillingEventUseCase {
     event: SubscriptionCreatedEvent,
     role: EntitlementRole
   ): Promise<void> {
-    const { userId, productId, currentPeriodEnd } = event.payload;
+    const { userId, productId, currentPeriodEnd, addonProductIds } = event.payload;
     const expiresAt = new Date(currentPeriodEnd);
 
     // Create entitlements from product (not a renewal, it's a new subscription)
     await this.createEntitlementsFromProduct(userId, productId, role, expiresAt, false);
 
-    // Process add-ons
-    await this.processAddons(userId, productId, role, expiresAt, false);
+    // Process add-ons from event payload (if provided) or from product configuration
+    if (addonProductIds && addonProductIds.length > 0) {
+      // Process add-ons specified in the event (from Stripe subscription items)
+      for (const addonProductId of addonProductIds) {
+        await this.processAddonProduct(userId, addonProductId, role, expiresAt, false);
+      }
+    } else {
+      // Fallback: process add-ons from product configuration (legacy behavior)
+      await this.processAddons(userId, productId, role, expiresAt, false);
+    }
 
     // Publish events for created entitlements
     await this.publishEntitlementEvents(userId, productId, "subscription.created", event.meta);
@@ -103,7 +111,7 @@ export class ProcessBillingEventUseCase {
     event: SubscriptionUpdatedEvent,
     role: EntitlementRole
   ): Promise<void> {
-    const { userId, productId, previousProductId, currentPeriodStart, currentPeriodEnd } = event.payload;
+    const { userId, productId, previousProductId, currentPeriodStart, currentPeriodEnd, addonProductIds } = event.payload;
     const expiresAt = new Date(currentPeriodEnd);
     const newPeriodStart = new Date(currentPeriodStart);
 
@@ -123,8 +131,18 @@ export class ProcessBillingEventUseCase {
     // Update entitlements (recreate/update) for the new product
     await this.createEntitlementsFromProduct(userId, productId, role, expiresAt, isRenewal);
 
-    // Process add-ons (may have changed)
-    await this.processAddons(userId, productId, role, expiresAt, isRenewal);
+    // Process add-ons from event payload (if provided) or from product configuration
+    if (addonProductIds && addonProductIds.length > 0) {
+      // Process add-ons specified in the event (from Stripe subscription items)
+      // These are the add-ons that are actually attached to the Stripe subscription
+      for (const addonProductId of addonProductIds) {
+        await this.processAddonProduct(userId, addonProductId, role, expiresAt, isRenewal);
+      }
+    } else {
+      // Fallback: process add-ons from product configuration (legacy behavior)
+      // This handles cases where add-ons aren't explicitly provided in the event
+      await this.processAddons(userId, productId, role, expiresAt, isRenewal);
+    }
 
     await this.publishEntitlementEvents(userId, productId, "subscription.updated", event.meta);
   }

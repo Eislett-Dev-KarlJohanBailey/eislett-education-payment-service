@@ -331,6 +331,11 @@ export class HandleWebhookUseCase {
 
     const periodDates = this.getSubscriptionPeriodDates(subscription);
 
+    // Extract add-on product IDs from metadata
+    const addonProductIds = subscription.metadata?.addonProductIds
+      ? subscription.metadata.addonProductIds.split(",").filter(id => id.trim())
+      : undefined;
+
     const billingEvent: BillingEvent.SubscriptionCreatedEvent = {
       type: BillingEvent.SubscriptionEventType.SUBSCRIPTION_CREATED,
       payload: {
@@ -342,6 +347,7 @@ export class HandleWebhookUseCase {
         currentPeriodStart: periodDates.currentPeriodStart,
         currentPeriodEnd: periodDates.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        addonProductIds,
       },
       meta: this.eventPublisher.createMetadata("stripe"),
       version: 1,
@@ -386,6 +392,11 @@ export class HandleWebhookUseCase {
 
     const periodDates = this.getSubscriptionPeriodDates(subscription);
 
+    // Extract add-on product IDs from metadata
+    const addonProductIds = subscription.metadata?.addonProductIds
+      ? subscription.metadata.addonProductIds.split(",").filter(id => id.trim())
+      : undefined;
+
     const billingEvent: BillingEvent.SubscriptionUpdatedEvent = {
       type: BillingEvent.SubscriptionEventType.SUBSCRIPTION_UPDATED,
       payload: {
@@ -398,6 +409,7 @@ export class HandleWebhookUseCase {
         currentPeriodEnd: periodDates.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
         previousProductId, // Include old productId if available
+        addonProductIds,
       },
       meta: this.eventPublisher.createMetadata("stripe"),
       version: 1,
@@ -425,6 +437,11 @@ export class HandleWebhookUseCase {
 
     const periodDates = this.getSubscriptionPeriodDates(subscription);
 
+    // Extract add-on product IDs from metadata
+    const addonProductIds = subscription.metadata?.addonProductIds
+      ? subscription.metadata.addonProductIds.split(",").filter(id => id.trim())
+      : undefined;
+
     const billingEvent = {
       type: eventType,
       payload: {
@@ -436,6 +453,7 @@ export class HandleWebhookUseCase {
         currentPeriodStart: periodDates.currentPeriodStart,
         currentPeriodEnd: periodDates.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        addonProductIds,
       },
       meta: this.eventPublisher.createMetadata("stripe"),
       version: 1,

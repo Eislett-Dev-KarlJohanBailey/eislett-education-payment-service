@@ -13,5 +13,7 @@ export interface SubscriptionPayload {
     cancelAtPeriodEnd?: boolean;
     
     previousProductId?: string; // The productId from the previous subscription (for updates)
+    
+    addonProductIds?: string[]; // Array of add-on product IDs attached to this subscription
   }
   

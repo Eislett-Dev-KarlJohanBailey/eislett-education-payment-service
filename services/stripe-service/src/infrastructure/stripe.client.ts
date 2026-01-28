@@ -64,18 +64,31 @@ export class StripeClient {
   async createCheckoutSession(params: {
     customerId: string;
     priceId: string;
+    addonLineItems?: Array<{ priceId: string; productId: string }>;
     successUrl: string;
     cancelUrl: string;
     metadata?: Record<string, string>;
   }): Promise<Stripe.Checkout.Session> {
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        price: params.priceId,
+        quantity: 1,
+      },
+    ];
+
+    // Add add-on line items
+    if (params.addonLineItems && params.addonLineItems.length > 0) {
+      for (const addon of params.addonLineItems) {
+        lineItems.push({
+          price: addon.priceId,
+          quantity: 1,
+        });
+      }
+    }
+
     return await this.client.checkout.sessions.create({
       customer: params.customerId,
-      line_items: [
-        {
-          price: params.priceId,
-          quantity: 1,
-        },
-      ],
+      line_items: lineItems,
       mode: "subscription",
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
@@ -121,34 +134,84 @@ export class StripeClient {
   }
 
   /**
-   * Updates an existing subscription to use a new price
+   * Updates an existing subscription to use a new price and add-ons
+   * Stripe automatically handles proration for subscription items
    */
   async updateSubscription(
     subscriptionId: string,
     params: {
       priceId: string;
+      addonLineItems?: Array<{ priceId: string; productId: string }>;
       metadata?: Record<string, string>;
     }
   ): Promise<Stripe.Subscription> {
-    // Get current subscription to find subscription item ID
+    // Get current subscription to find subscription item IDs
     const subscription = await this.retrieveSubscription(subscriptionId);
     
     if (!subscription.items.data[0]) {
       throw new Error(`Subscription ${subscriptionId} has no items`);
     }
 
-    const subscriptionItemId = subscription.items.data[0].id;
+    const mainSubscriptionItemId = subscription.items.data[0].id;
+    const items: Stripe.SubscriptionUpdateParams.Item[] = [
+      {
+        id: mainSubscriptionItemId,
+        price: params.priceId,
+      },
+    ];
 
-    // Update subscription with new price
+    // Handle add-ons
+    if (params.addonLineItems && params.addonLineItems.length > 0) {
+      // Get existing add-on subscription items (items after the first one)
+      const existingAddonItems = subscription.items.data.slice(1);
+      const newAddonPriceIds = new Set(params.addonLineItems.map(addon => addon.priceId));
+
+      // Update or add add-on items
+      for (const addon of params.addonLineItems) {
+        const existingAddonItem = existingAddonItems.find(item => item.price.id === addon.priceId);
+        
+        if (existingAddonItem) {
+          // Update existing add-on item (Stripe will prorate automatically)
+          items.push({
+            id: existingAddonItem.id,
+            price: addon.priceId,
+          });
+        } else {
+          // Add new add-on item (Stripe will prorate from now until next billing cycle)
+          items.push({
+            price: addon.priceId,
+            quantity: 1,
+          });
+        }
+      }
+
+      // Remove add-ons that are no longer included
+      for (const existingItem of existingAddonItems) {
+        const stillIncluded = newAddonPriceIds.has(existingItem.price.id);
+        if (!stillIncluded) {
+          items.push({
+            id: existingItem.id,
+            deleted: true, // Remove this subscription item
+          });
+        }
+      }
+    } else {
+      // Remove all existing add-ons if none are provided
+      const existingAddonItems = subscription.items.data.slice(1);
+      for (const existingItem of existingAddonItems) {
+        items.push({
+          id: existingItem.id,
+          deleted: true,
+        });
+      }
+    }
+
+    // Update subscription with new price and add-ons
+    // Stripe automatically handles proration for all items
     return await this.client.subscriptions.update(subscriptionId, {
-      items: [
-        {
-          id: subscriptionItemId,
-          price: params.priceId,
-        },
-      ],
+      items: items,
+      proration_behavior: "create_prorations", // Automatically prorate add-ons
       metadata: params.metadata || subscription.metadata,
-      // Ensure metadata is also in subscription_data for new items
       default_source: undefined,
     });
   }

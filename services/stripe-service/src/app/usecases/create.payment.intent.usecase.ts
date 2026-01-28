@@ -1,12 +1,13 @@
 import { StripeClient } from "../../infrastructure/stripe.client";
 import { StripeCustomerRepository } from "../../infrastructure/stripe-customer.repository";
-import { GetProductUseCase, GetPriceUseCase, UpdateProductUseCase, UpdatePriceUseCase, BillingType, Interval } from "@libs/domain";
+import { GetProductUseCase, GetPriceUseCase, UpdateProductUseCase, UpdatePriceUseCase, BillingType, Interval, ListPricesByProductUseCase, ProductType } from "@libs/domain";
 
 export interface CreatePaymentIntentInput {
   userId: string;
   userRole?: string;
   userEmail?: string;
   priceId: string;
+  addonProductIds?: string[]; // Optional array of add-on product IDs to attach
   successUrl: string;
   cancelUrl: string;
 }
@@ -26,7 +27,8 @@ export class CreatePaymentIntentUseCase {
     private readonly getProductUseCase: GetProductUseCase,
     private readonly getPriceUseCase: GetPriceUseCase,
     private readonly updateProductUseCase: UpdateProductUseCase,
-    private readonly updatePriceUseCase: UpdatePriceUseCase
+    private readonly updatePriceUseCase: UpdatePriceUseCase,
+    private readonly listPricesByProductUseCase: ListPricesByProductUseCase
   ) {}
 
   async execute(input: CreatePaymentIntentInput): Promise<CreatePaymentIntentOutput> {
@@ -108,6 +110,75 @@ export class CreatePaymentIntentUseCase {
       });
     }
 
+    // Process add-ons if provided
+    const addonLineItems: Array<{ priceId: string; productId: string }> = [];
+    const addonProductIds: string[] = [];
+    
+    if (input.addonProductIds && input.addonProductIds.length > 0) {
+      for (const addonProductId of input.addonProductIds) {
+        const addonProduct = await this.getProductUseCase.execute(addonProductId);
+        
+        if (addonProduct.type !== ProductType.ADDON) {
+          throw new Error(`Product ${addonProductId} is not an add-on product`);
+        }
+
+        // Get the first price for the add-on (or use addonConfig pricing if available)
+        const addonPrices = await this.listPricesByProductUseCase.execute({
+          productId: addonProductId,
+          pageNumber: 1,
+          pageSize: 1,
+        });
+
+        if (addonPrices.items.length === 0) {
+          throw new Error(`No price found for add-on product ${addonProductId}`);
+        }
+
+        const addonPrice = addonPrices.items[0];
+        let addonStripeProductId = addonProduct.providers?.stripe;
+        let addonStripePriceId = addonPrice.providers?.stripe;
+
+        // Create Stripe product if needed
+        if (!addonStripeProductId) {
+          const stripeProduct = await this.stripeClient.createProduct(
+            addonProduct.name,
+            addonProduct.description
+          );
+          addonStripeProductId = stripeProduct.id;
+          await this.updateProductUseCase.execute(addonProductId, {
+            providers: {
+              ...addonProduct.providers,
+              stripe: addonStripeProductId,
+            },
+          });
+        }
+
+        // Create Stripe price if needed
+        if (!addonStripePriceId) {
+          const recurring = addonPrice.billingType === BillingType.RECURRING ? {
+            interval: this.mapInterval(addonPrice.interval!),
+            intervalCount: addonPrice.frequency,
+          } : undefined;
+
+          const stripePrice = await this.stripeClient.createPrice({
+            productId: addonStripeProductId,
+            unitAmount: Math.round(addonPrice.amount * 100),
+            currency: addonPrice.currency,
+            recurring,
+          });
+          addonStripePriceId = stripePrice.id;
+          await this.updatePriceUseCase.execute(addonPrice.priceId, {
+            providers: {
+              ...addonPrice.providers,
+              stripe: addonStripePriceId,
+            },
+          });
+        }
+
+        addonLineItems.push({ priceId: addonStripePriceId, productId: addonProductId });
+        addonProductIds.push(addonProductId);
+      }
+    }
+
     // Check for existing active subscriptions
     // If user already has a subscription, update it instead of creating a new one
     const existingSubscriptions = await this.stripeClient.listCustomerSubscriptions(stripeCustomerId);
@@ -123,17 +194,18 @@ export class CreatePaymentIntentUseCase {
       // This will be used by the webhook to remove entitlements from the old product
       const oldProductId = existingSubscription.metadata?.productId;
       
-      // Update the subscription with the new price
-      // Include previousProductId in metadata temporarily so webhook can use it
-      // The webhook will handle removing old entitlements
+      // Update the subscription with the new price and add-ons
+      // Stripe automatically handles proration for subscription items
       const updatedSubscription = await this.stripeClient.updateSubscription(
         existingSubscription.id,
         {
           priceId: stripePriceId!,
+          addonLineItems: addonLineItems.length > 0 ? addonLineItems : undefined,
           metadata: {
             userId: input.userId,
             priceId: input.priceId,
             productId: product.productId,
+            ...(addonProductIds.length > 0 ? { addonProductIds: addonProductIds.join(",") } : {}),
             // Include old productId if it exists and is different
             ...(oldProductId && oldProductId !== product.productId ? { previousProductId: oldProductId } : {}),
           },
@@ -147,16 +219,18 @@ export class CreatePaymentIntentUseCase {
       };
     }
 
-    // No existing subscription - create a new checkout session
+    // No existing subscription - create a new checkout session with add-ons
     const session = await this.stripeClient.createCheckoutSession({
       customerId: stripeCustomerId,
       priceId: stripePriceId!,
+      addonLineItems: addonLineItems.length > 0 ? addonLineItems : undefined,
       successUrl: input.successUrl,
       cancelUrl: input.cancelUrl,
       metadata: {
         userId: input.userId,
         priceId: input.priceId,
         productId: product.productId,
+        ...(addonProductIds.length > 0 ? { addonProductIds: addonProductIds.join(",") } : {}),
       },
     });
 

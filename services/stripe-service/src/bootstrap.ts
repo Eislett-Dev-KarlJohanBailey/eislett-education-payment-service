@@ -13,6 +13,7 @@ import {
   UpdatePriceUseCase,
   DynamoProductRepository,
   DynamoPriceRepository,
+  ListPricesByProductUseCase,
 } from "@libs/domain";
 
 export function bootstrap() {
@@ -30,6 +31,7 @@ export function bootstrap() {
   const getPriceUseCase = new GetPriceUseCase(priceRepo);
   const updateProductUseCase = new UpdateProductUseCase(productRepo);
   const updatePriceUseCase = new UpdatePriceUseCase(priceRepo);
+  const listPricesByProductUseCase = new ListPricesByProductUseCase(priceRepo);
 
   const createPaymentIntentUseCase = new CreatePaymentIntentUseCase(
     stripeClient,
@@ -37,7 +39,8 @@ export function bootstrap() {
     getProductUseCase,
     getPriceUseCase,
     updateProductUseCase,
-    updatePriceUseCase
+    updatePriceUseCase,
+    listPricesByProductUseCase
   );
 
   const handleWebhookUseCase = new HandleWebhookUseCase(
