@@ -247,6 +247,96 @@ GET /access
 }
 ```
 
+### Get User Entitlement by Key
+```
+GET /access/:key
+```
+
+**Authentication:**
+- **Required**: Bearer token in `Authorization` header
+- **Format**: `Authorization: Bearer <jwt-token>`
+- The JWT token must contain:
+  - `id` (string) - User ID
+  - `role` (string, optional) - User role
+
+**Path Parameters:**
+- `key` (required) - The entitlement key to check (e.g., `ACCESS_DASHBOARD`, `AI_TOKENS`, `QUIZ_ATTEMPTS`)
+
+**Response (200 OK):**
+```json
+{
+  "userId": "user-123",
+  "entitlements": {
+    "AI_TOKENS": {
+      "limit": 10000,
+      "used": 2500
+    }
+  }
+}
+```
+
+**Response Format:**
+- **Boolean entitlements**: Return `true` if the entitlement is active
+- **Usage-based entitlements**: Return an object with `limit` and `used` properties
+
+**Error Responses:**
+
+**401 Unauthorized** - Missing or invalid JWT token:
+```json
+{
+  "error": "UNAUTHORIZED",
+  "message": "Authorization token is required"
+}
+```
+
+**404 Not Found** - Entitlement not found or not active:
+```json
+{
+  "error": "NOT_FOUND",
+  "message": "Entitlement 'AI_TOKENS' not found for user 'user-123'"
+}
+```
+
+**404 Not Found** - Route not found:
+```json
+{
+  "message": "Route not found"
+}
+```
+
+**500 Internal Server Error** - Server error:
+```json
+{
+  "error": "INTERNAL_SERVER_ERROR",
+  "message": "Something went wrong"
+}
+```
+
+**Example Usage:**
+
+```bash
+# Check if user has access to AI_TOKENS entitlement
+curl -X GET "https://api.example.com/access/AI_TOKENS" \
+  -H "Authorization: Bearer <jwt-token>"
+
+# Response if user has access:
+{
+  "userId": "user-123",
+  "entitlements": {
+    "AI_TOKENS": {
+      "limit": 10000,
+      "used": 2500
+    }
+  }
+}
+
+# Response if user doesn't have access (404):
+{
+  "error": "NOT_FOUND",
+  "message": "Entitlement 'AI_TOKENS' not found for user 'user-123'"
+}
+```
+
 ## Entitlement Types
 
 The service supports various entitlement types defined in the domain:

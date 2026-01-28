@@ -16,15 +16,54 @@ function normalizePath(path: string): string {
 
 /**
  * Finds a matching route handler
+ * Supports path parameters like /access/:key
  */
-function findRouteHandler(method: string, path: string): ((req: any) => Promise<any>) | null {
+function findRouteHandler(method: string, path: string, pathParams: Record<string, string>): ((req: any) => Promise<any>) | null {
   const normalizedPath = normalizePath(path);
   const pathWithoutQuery = normalizedPath.split("?")[0]; // Remove query string
   
-  // Try exact match
+  // Try exact match first
   const exactKey = `${method} ${pathWithoutQuery}`;
   if (routes[exactKey]) {
     return routes[exactKey];
+  }
+  
+  // Try pattern matching for path parameters (e.g., /access/:key)
+  for (const routeKey of Object.keys(routes)) {
+    const [routeMethod, routePath] = routeKey.split(" ", 2);
+    
+    if (routeMethod !== method) {
+      continue;
+    }
+    
+    // Check if route has path parameters (contains :param)
+    if (routePath.includes(":")) {
+      const routeParts = routePath.split("/");
+      const pathParts = pathWithoutQuery.split("/");
+      
+      if (routeParts.length === pathParts.length) {
+        let matches = true;
+        const extractedParams: Record<string, string> = {};
+        
+        for (let i = 0; i < routeParts.length; i++) {
+          if (routeParts[i].startsWith(":")) {
+            // This is a parameter, extract it
+            const paramName = routeParts[i].substring(1);
+            extractedParams[paramName] = pathParts[i];
+          } else if (routeParts[i] !== pathParts[i]) {
+            // Path segments don't match
+            matches = false;
+            break;
+          }
+        }
+        
+        if (matches) {
+          // Merge extracted params into pathParams
+          Object.assign(pathParams, extractedParams);
+          return routes[routeKey];
+        }
+      }
+    }
   }
   
   return null;
@@ -61,7 +100,7 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
       user: user
     };
     
-    const handler = findRouteHandler(req.method, normalizedPath);
+    const handler = findRouteHandler(req.method, normalizedPath, requestWithUser.pathParams);
     console.log("Found handler:", handler ? "yes" : "no");
 
     if (!handler) {
