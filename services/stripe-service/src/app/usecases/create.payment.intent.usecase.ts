@@ -12,9 +12,11 @@ export interface CreatePaymentIntentInput {
 }
 
 export interface CreatePaymentIntentOutput {
-  checkoutUrl: string;
+  checkoutUrl?: string;
   paymentIntentId?: string;
   customerId: string;
+  subscriptionId?: string;
+  isUpdate: boolean;
 }
 
 export class CreatePaymentIntentUseCase {
@@ -106,7 +108,46 @@ export class CreatePaymentIntentUseCase {
       });
     }
 
-    // Create checkout session
+    // Check for existing active subscriptions
+    // If user already has a subscription, update it instead of creating a new one
+    const existingSubscriptions = await this.stripeClient.listCustomerSubscriptions(stripeCustomerId);
+    
+    if (existingSubscriptions.length > 0) {
+      // User has an existing subscription - update it instead of creating a new one
+      // This prevents double billing and automatically handles proration
+      const existingSubscription = existingSubscriptions[0]; // Take the first active subscription
+      
+      console.log(`Updating existing subscription ${existingSubscription.id} for customer ${stripeCustomerId}`);
+      
+      // Get the old productId from the existing subscription metadata
+      // This will be used by the webhook to remove entitlements from the old product
+      const oldProductId = existingSubscription.metadata?.productId;
+      
+      // Update the subscription with the new price
+      // Include previousProductId in metadata temporarily so webhook can use it
+      // The webhook will handle removing old entitlements
+      const updatedSubscription = await this.stripeClient.updateSubscription(
+        existingSubscription.id,
+        {
+          priceId: stripePriceId!,
+          metadata: {
+            userId: input.userId,
+            priceId: input.priceId,
+            productId: product.productId,
+            // Include old productId if it exists and is different
+            ...(oldProductId && oldProductId !== product.productId ? { previousProductId: oldProductId } : {}),
+          },
+        }
+      );
+
+      return {
+        customerId: stripeCustomerId,
+        subscriptionId: updatedSubscription.id,
+        isUpdate: true,
+      };
+    }
+
+    // No existing subscription - create a new checkout session
     const session = await this.stripeClient.createCheckoutSession({
       customerId: stripeCustomerId,
       priceId: stripePriceId!,
@@ -123,6 +164,7 @@ export class CreatePaymentIntentUseCase {
       checkoutUrl: session.url || "",
       paymentIntentId: session.payment_intent as string | undefined,
       customerId: stripeCustomerId,
+      isUpdate: false,
     };
   }
 

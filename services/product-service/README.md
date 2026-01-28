@@ -264,6 +264,226 @@ DELETE /products/{id}
 
 **Response:** `204 No Content`
 
+## Usage Management
+
+Usage limits allow you to track and limit resource consumption for entitlements. When a product is purchased, usage limits are automatically synced to user entitlements and can be tracked and enforced in your application.
+
+### Understanding Usage Limits
+
+Usage limits define:
+- **What** resource is being tracked (metric name, e.g., `ai_tokens`, `quiz_attempts`)
+- **How much** can be consumed (limit, e.g., 10000)
+- **When** it resets (period: `day`, `week`, `month`, `year`, `billing_cycle`, `lifetime`)
+
+### Defining Usage Limits in Products
+
+Usage limits are defined in the `usageLimits` array when creating or updating a product:
+
+```json
+{
+  "name": "Premium Subscription",
+  "type": "subscription",
+  "entitlements": ["ai_tokens", "quiz_attempts"],
+  "usageLimits": [
+    {
+      "metric": "ai_tokens",
+      "limit": 10000,
+      "period": "month"
+    },
+    {
+      "metric": "quiz_attempts",
+      "limit": 50,
+      "period": "billing_cycle"
+    }
+  ]
+}
+```
+
+### Usage Limit Structure
+
+```typescript
+interface UsageLimit {
+  metric: string;        // Resource identifier (e.g., "ai_tokens", "quiz_attempts", "api_calls")
+  limit: number;         // Maximum allowed consumption (e.g., 10000)
+  period: UsagePeriod;   // Reset period: "day" | "week" | "month" | "year" | "billing_cycle" | "lifetime"
+  window?: UsageWindow;  // Reset window: "calendar" | "rolling" | "billing" | "custom" (default: "calendar")
+  startDate?: Date;      // For custom windows
+}
+```
+
+### Supported Reset Periods
+
+| Period | Description | Reset Behavior |
+|--------|-------------|----------------|
+| `day` | Daily limit | Resets at midnight (calendar) or every 24 hours (rolling) |
+| `week` | Weekly limit | Resets on Sunday (calendar) or every 7 days (rolling) |
+| `month` | Monthly limit | Resets on the 1st of each month (calendar) or every 30 days (rolling) |
+| `year` | Yearly limit | Resets on January 1st (calendar) or every 365 days (rolling) |
+| `billing_cycle` | Billing cycle | Resets when subscription renews (aligned with subscription period) |
+| `lifetime` | Lifetime limit | Never resets (total lifetime consumption) |
+
+### Usage Windows
+
+| Window | Description | Example |
+|--------|-------------|---------|
+| `calendar` | Fixed calendar periods | Jan 1-31, Feb 1-28, etc. |
+| `rolling` | Rolling window from current date | Last 30 days from today |
+| `billing` | Aligned with subscription billing date | Resets on subscription renewal date |
+| `custom` | Custom start date + period | Defined by `startDate` |
+
+### Example Usage Limit Configurations
+
+**Daily AI Token Limit:**
+```json
+{
+  "metric": "ai_tokens",
+  "limit": 10000,
+  "period": "day",
+  "window": "calendar"
+}
+```
+
+**Monthly Quiz Attempts (Rolling Window):**
+```json
+{
+  "metric": "quiz_attempts",
+  "limit": 50,
+  "period": "month",
+  "window": "rolling"
+}
+```
+
+**Billing Cycle API Calls:**
+```json
+{
+  "metric": "api_calls",
+  "limit": 5000,
+  "period": "billing_cycle"
+}
+```
+
+**Lifetime Course Access:**
+```json
+{
+  "metric": "course_access",
+  "limit": 100,
+  "period": "lifetime"
+}
+```
+
+### How Usage Works
+
+1. **Product Definition**: Define usage limits in your product's `usageLimits` array
+2. **Automatic Sync**: When a user purchases a product, usage limits are automatically synced to their entitlements
+3. **Usage Tracking**: Track usage by calling the entitlement service to increment usage
+4. **Automatic Resets**: Usage automatically resets based on the defined period and window
+5. **Add-on Limits**: Add-on products add to base product limits (additive), not replace them
+
+### Checking Usage
+
+Usage is tracked in user entitlements. To check usage:
+
+1. **Get User Entitlements** (via Entitlement Service):
+   ```bash
+   GET /entitlements?userId={userId}
+   ```
+
+2. **Response includes usage information:**
+   ```json
+   {
+     "entitlements": [
+       {
+         "key": "ai_tokens",
+         "status": "active",
+         "usage": {
+           "limit": 10000,
+           "used": 3500,
+           "resetAt": "2024-02-01T00:00:00.000Z"
+         }
+       }
+     ]
+   }
+   ```
+
+### Incrementing Usage
+
+To track consumption, increment usage through the Entitlement Service:
+
+```bash
+PUT /entitlements/{userId}/{entitlementKey}
+{
+  "usageIncrement": 100
+}
+```
+
+The entitlement service will:
+- Check if usage can be consumed (`used + increment <= limit`)
+- Increment the `used` counter
+- Throw an error if the limit would be exceeded
+
+### Usage Reset Behavior
+
+Usage resets automatically based on the reset strategy:
+
+- **Periodic Resets** (`day`, `week`, `month`, `year`): Reset at the start of each period
+- **Billing Cycle**: Reset when subscription renews (aligned with `currentPeriodEnd`)
+- **Lifetime**: Never resets
+
+The system checks for resets:
+- When entitlements are accessed
+- When usage is incremented
+- When subscription renewals occur
+
+### Complete Product Example with Usage Limits
+
+```json
+{
+  "name": "Premium Plan",
+  "description": "Monthly premium subscription with AI features",
+  "type": "subscription",
+  "entitlements": [
+    "access_dashboard",
+    "access_analytics",
+    "ai_tokens",
+    "quiz_attempts"
+  ],
+  "usageLimits": [
+    {
+      "metric": "ai_tokens",
+      "limit": 10000,
+      "period": "month",
+      "window": "calendar"
+    },
+    {
+      "metric": "quiz_attempts",
+      "limit": 50,
+      "period": "billing_cycle"
+    },
+    {
+      "metric": "api_calls",
+      "limit": 5000,
+      "period": "month",
+      "window": "rolling"
+    }
+  ],
+  "isActive": true
+}
+```
+
+### Best Practices
+
+1. **Metric Naming**: Use clear, consistent metric names (e.g., `ai_tokens`, `quiz_attempts`, `api_calls`)
+2. **Limit Sizing**: Set realistic limits based on your business model
+3. **Reset Periods**: Choose reset periods that align with your billing cycles
+4. **Add-on Limits**: Remember that add-on limits are additive to base product limits
+5. **Lifetime Limits**: Use `lifetime` period for one-time purchases or permanent limits
+
+### Related Services
+
+- **Entitlement Service**: Manages user entitlements and usage tracking
+- **Pricing Service**: Defines pricing for products
+- **Stripe Service**: Handles payment processing and subscription management
+
 ## Testing
 
 ### Running Tests

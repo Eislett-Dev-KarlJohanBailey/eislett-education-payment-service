@@ -193,14 +193,37 @@ export class HandleWebhookUseCase {
 
   private async handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
     const subscription = event.data.object as Stripe.Subscription;
+    const previousAttributes = (event.data as any).previous_attributes || {};
     const customer = await this.customerRepo.findByStripeCustomerId(subscription.customer as string);
     
     if (!customer) {
       throw new Error(`Customer not found for Stripe customer ID: ${subscription.customer}`);
     }
 
-    // Resolve productId from metadata or fallback to Stripe product lookup
+    // Resolve new productId from current subscription metadata
     const productId = await this.resolveProductId(subscription);
+
+    // Try to get previous productId from multiple sources:
+    // 1. From previous_attributes (Stripe webhook includes this when metadata changes)
+    // 2. From current metadata.previousProductId (set by CreatePaymentIntentUseCase when updating)
+    let previousProductId: string | undefined;
+    
+    if (previousAttributes.metadata && previousAttributes.metadata.productId) {
+      // Get from Stripe's previous_attributes (most reliable)
+      previousProductId = previousAttributes.metadata.productId;
+    } else if (subscription.metadata?.previousProductId) {
+      // Fallback: get from current metadata (set by our update logic)
+      previousProductId = subscription.metadata.previousProductId;
+    }
+    
+    // Only use previousProductId if it's different from current productId
+    if (previousProductId === productId) {
+      previousProductId = undefined; // Product didn't actually change
+    }
+    
+    if (previousProductId) {
+      console.log(`Subscription ${subscription.id} product changed from ${previousProductId} to ${productId}`);
+    }
 
     const periodDates = this.getSubscriptionPeriodDates(subscription);
 
@@ -215,6 +238,7 @@ export class HandleWebhookUseCase {
         currentPeriodStart: periodDates.currentPeriodStart,
         currentPeriodEnd: periodDates.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        previousProductId, // Include old productId if available
       },
       meta: this.eventPublisher.createMetadata("stripe"),
       version: 1,

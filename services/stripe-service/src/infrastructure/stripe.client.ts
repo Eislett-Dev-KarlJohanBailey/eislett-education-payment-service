@@ -108,6 +108,51 @@ export class StripeClient {
     return await this.client.subscriptions.retrieve(subscriptionId);
   }
 
+  /**
+   * Lists all active subscriptions for a customer
+   */
+  async listCustomerSubscriptions(customerId: string): Promise<Stripe.Subscription[]> {
+    const subscriptions = await this.client.subscriptions.list({
+      customer: customerId,
+      status: "active",
+      limit: 100,
+    });
+    return subscriptions.data;
+  }
+
+  /**
+   * Updates an existing subscription to use a new price
+   */
+  async updateSubscription(
+    subscriptionId: string,
+    params: {
+      priceId: string;
+      metadata?: Record<string, string>;
+    }
+  ): Promise<Stripe.Subscription> {
+    // Get current subscription to find subscription item ID
+    const subscription = await this.retrieveSubscription(subscriptionId);
+    
+    if (!subscription.items.data[0]) {
+      throw new Error(`Subscription ${subscriptionId} has no items`);
+    }
+
+    const subscriptionItemId = subscription.items.data[0].id;
+
+    // Update subscription with new price
+    return await this.client.subscriptions.update(subscriptionId, {
+      items: [
+        {
+          id: subscriptionItemId,
+          price: params.priceId,
+        },
+      ],
+      metadata: params.metadata || subscription.metadata,
+      // Ensure metadata is also in subscription_data for new items
+      default_source: undefined,
+    });
+  }
+
   constructEvent(
     payload: string | Buffer,
     signature: string,

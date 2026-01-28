@@ -98,14 +98,24 @@ export class ProcessBillingEventUseCase {
     event: SubscriptionUpdatedEvent,
     role: EntitlementRole
   ): Promise<void> {
-    const { userId, productId, currentPeriodStart, currentPeriodEnd } = event.payload;
+    const { userId, productId, previousProductId, currentPeriodStart, currentPeriodEnd } = event.payload;
     const expiresAt = new Date(currentPeriodEnd);
     const newPeriodStart = new Date(currentPeriodStart);
+
+    // If subscription was updated to a different product, remove entitlements from the old product
+    // This prevents double billing and ensures user only has entitlements from the new subscription
+    if (previousProductId && previousProductId !== productId) {
+      console.log(`Subscription updated from product ${previousProductId} to ${productId}. Removing entitlements from old product.`);
+      
+      // Revoke entitlements from the old product immediately
+      // This removes what the last subscription provided
+      await this.revokeEntitlements(userId, previousProductId, true);
+    }
 
     // Detect if this is a billing cycle renewal (new period started)
     const isRenewal = await this.isBillingCycleRenewal(userId, productId, newPeriodStart);
 
-    // Update entitlements (recreate/update)
+    // Update entitlements (recreate/update) for the new product
     await this.createEntitlementsFromProduct(userId, productId, role, expiresAt, isRenewal);
 
     // Process add-ons (may have changed)

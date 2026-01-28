@@ -11,5 +11,7 @@ export interface SubscriptionPayload {
     currentPeriodEnd: string;
   
     cancelAtPeriodEnd?: boolean;
+    
+    previousProductId?: string; // The productId from the previous subscription (for updates)
   }
   

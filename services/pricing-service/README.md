@@ -306,9 +306,9 @@ For one-time billing, omit the `interval` field:
 
 ```json
 {
-  "productId": "prod-123",
-  "billingType": "one_time",
-  "amount": 5000,
+  "productId": "c11d303d-a02c-4a6c-a891-fa9a40780c4e",
+  "billingType": "subscription",
+  "amount": 500,
   "currency": "USD"
 }
 ```
