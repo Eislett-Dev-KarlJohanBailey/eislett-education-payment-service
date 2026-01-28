@@ -69,3 +69,7 @@ export * as BillingEvent from "./billing-events/index";
 // Dunning
 
 export * from "./dunning/index";
+
+// Trials
+
+export * from "./trials/index";
