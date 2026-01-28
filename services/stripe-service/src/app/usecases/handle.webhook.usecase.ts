@@ -184,6 +184,20 @@ export class HandleWebhookUseCase {
       }
     }
 
+    // Get payment intent error if available
+    let failureCode: string | undefined;
+    let failureReason: string | undefined;
+    
+    if (invoice.payment_intent) {
+      try {
+        const paymentIntent = await this.stripeClient.retrievePaymentIntent(invoice.payment_intent as string);
+        failureCode = paymentIntent.last_payment_error?.code;
+        failureReason = paymentIntent.last_payment_error?.message;
+      } catch (error) {
+        console.error(`Error retrieving payment intent ${invoice.payment_intent} for invoice:`, error);
+      }
+    }
+
     // Publish as payment_failed event (same type, invoice is just another source)
     const billingEvent: BillingEvent.PaymentFailedEvent = {
       type: BillingEvent.PaymentEventType.PAYMENT_FAILED,
@@ -196,8 +210,8 @@ export class HandleWebhookUseCase {
         productId: productId,
         subscriptionId: subscriptionId,
         provider: "stripe",
-        failureCode: invoice.last_payment_error?.code,
-        failureReason: invoice.last_payment_error?.message,
+        failureCode,
+        failureReason,
         portalUrl,
         expiresAt,
       },
@@ -430,17 +444,23 @@ export class HandleWebhookUseCase {
     await this.eventPublisher.publish(billingEvent as any);
   }
 
-  private async getCustomerFromPaymentIntent(paymentIntent: Stripe.PaymentIntent): Promise<{ userId: string }> {
+  private async getCustomerFromPaymentIntent(paymentIntent: Stripe.PaymentIntent): Promise<{ userId: string; stripeCustomerId: string }> {
     if (paymentIntent.customer) {
-      const customer = await this.customerRepo.findByStripeCustomerId(paymentIntent.customer as string);
+      const stripeCustomerId = paymentIntent.customer as string;
+      const customer = await this.customerRepo.findByStripeCustomerId(stripeCustomerId);
       if (customer) {
-        return { userId: customer.userId };
+        return { userId: customer.userId, stripeCustomerId };
       }
+      // If customer not found in our DB but exists in Stripe, try to get userId from metadata
+      if (paymentIntent.metadata.userId) {
+        return { userId: paymentIntent.metadata.userId, stripeCustomerId };
+      }
+      throw new Error(`Customer ${stripeCustomerId} not found in database and no userId in payment intent metadata`);
     }
 
-    // Fallback to metadata
+    // Fallback to metadata (but we still need Stripe customer ID for portal URL)
     if (paymentIntent.metadata.userId) {
-      return { userId: paymentIntent.metadata.userId };
+      throw new Error(`Payment intent ${paymentIntent.id} has userId but no Stripe customer ID - cannot generate portal URL`);
     }
 
     throw new Error(`Could not determine userId from payment intent ${paymentIntent.id}`);
