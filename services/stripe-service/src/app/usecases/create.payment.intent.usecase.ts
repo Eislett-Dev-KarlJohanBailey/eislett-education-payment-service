@@ -179,11 +179,15 @@ export class CreatePaymentIntentUseCase {
       }
     }
 
-    // Check for existing active subscriptions
-    // If user already has a subscription, update it instead of creating a new one
-    const existingSubscriptions = await this.stripeClient.listCustomerSubscriptions(stripeCustomerId);
+    // For one-time payments, don't check for existing subscriptions
+    // One-time payments are separate from subscriptions
+    const isOneTime = price.billingType === BillingType.ONE_TIME;
     
-    if (existingSubscriptions.length > 0) {
+    // Check for existing active subscriptions (only for recurring payments)
+    // If user already has a subscription, update it instead of creating a new one
+    const existingSubscriptions = isOneTime ? [] : await this.stripeClient.listCustomerSubscriptions(stripeCustomerId);
+    
+    if (!isOneTime && existingSubscriptions.length > 0) {
       // User has an existing subscription - update it instead of creating a new one
       // This prevents double billing and automatically handles proration
       const existingSubscription = existingSubscriptions[0]; // Take the first active subscription
@@ -219,17 +223,20 @@ export class CreatePaymentIntentUseCase {
       };
     }
 
-    // No existing subscription - create a new checkout session with add-ons
+    // No existing subscription - create a new checkout session
+    // For one-time payments, use mode: "payment", for subscriptions use mode: "subscription"
     const session = await this.stripeClient.createCheckoutSession({
       customerId: stripeCustomerId,
       priceId: stripePriceId!,
-      addonLineItems: addonLineItems.length > 0 ? addonLineItems : undefined,
+      mode: isOneTime ? "payment" : "subscription",
+      addonLineItems: isOneTime ? undefined : (addonLineItems.length > 0 ? addonLineItems : undefined), // Add-ons only for subscriptions
       successUrl: input.successUrl,
       cancelUrl: input.cancelUrl,
       metadata: {
         userId: input.userId,
         priceId: input.priceId,
         productId: product.productId,
+        billingType: isOneTime ? "one_time" : "recurring",
         ...(addonProductIds.length > 0 ? { addonProductIds: addonProductIds.join(",") } : {}),
       },
     });

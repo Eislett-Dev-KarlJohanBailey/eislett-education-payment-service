@@ -5,11 +5,19 @@ export class EntitlementUsage {
       public limit: number,
       public used: number,
       public resetAt?: Date,
-      public resetStrategy?: ResetStrategy
+      public resetStrategy?: ResetStrategy,
+      public permanentLimit?: number // Permanent limit from one-time payments that cannot be removed
     ) {}
   
+    /**
+     * Gets the effective limit (base limit + permanent limit from one-time payments)
+     */
+    getEffectiveLimit(): number {
+      return this.limit + (this.permanentLimit || 0);
+    }
+
     canConsume(amount = 1): boolean {
-      return this.used + amount <= this.limit;
+      return this.used + amount <= this.getEffectiveLimit();
     }
   
     consume(amount = 1): void {

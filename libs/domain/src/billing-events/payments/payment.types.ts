@@ -8,6 +8,7 @@ export interface PaymentPayload {
     priceId: string;
     productId?: string;
     subscriptionId?: string;
+    billingType?: "one_time" | "recurring"; // Distinguishes one-time payments from subscriptions
   
     provider: "stripe" | "powertranz";
   

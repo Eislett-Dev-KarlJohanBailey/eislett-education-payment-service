@@ -200,16 +200,26 @@ export class ProcessBillingEventUseCase {
     event: PaymentSuccessfulEvent,
     role: EntitlementRole
   ): Promise<void> {
-    const { userId, productId } = event.payload;
+    const { userId, productId, billingType } = event.payload;
 
     if (!productId) {
       console.log(`Payment successful but no productId, skipping entitlement creation`);
       return;
     }
 
-    // For one-off purchases, create entitlements (no expiration unless product specifies)
-    // Not a renewal, it's a new purchase
-    await this.createEntitlementsFromProduct(userId, productId, role, undefined, false);
+    // Check if this is a one-time payment
+    const isOneTime = billingType === "one_time" || !event.payload.subscriptionId;
+
+    if (isOneTime) {
+      // For one-time payments:
+      // 1. Create entitlements without expiration (lifetime access)
+      // 2. Apply permanent limits that cannot be removed even if subscription is canceled
+      // 3. If entitlement already exists with expiration, keep expiration but add permanent limit
+      await this.createEntitlementsFromProduct(userId, productId, role, undefined, false, true);
+    } else {
+      // For subscription payments, create entitlements with expiration
+      await this.createEntitlementsFromProduct(userId, productId, role, undefined, false, false);
+    }
 
     await this.publishEntitlementEvents(userId, productId, "payment.successful", event.meta);
   }
@@ -261,13 +271,15 @@ export class ProcessBillingEventUseCase {
 
   /**
    * Creates entitlements for a user based on a product
+   * @param isOneTimePayment - If true, creates entitlements without expiration and with permanent limits
    */
   private async createEntitlementsFromProduct(
     userId: string,
     productId: string,
     role: EntitlementRole,
     expiresAt?: Date,
-    isRenewal = false
+    isRenewal = false,
+    isOneTimePayment = false
   ): Promise<void> {
     // Get product details
     const product = await this.productRepo.findById(productId);
@@ -324,7 +336,8 @@ export class ProcessBillingEventUseCase {
     await this.syncProductLimitsUseCase.execute({
       productId,
       userId,
-      isAddon: false // Base product, not add-on
+      isAddon: false, // Base product, not add-on
+      isOneTimePayment // Pass flag for one-time payments
     });
   }
 
@@ -534,6 +547,7 @@ export class ProcessBillingEventUseCase {
     }
 
     // Revoke entitlements for each entitlement key in the product
+    // IMPORTANT: Permanent limits from one-time payments are NEVER removed
     for (const entitlementKey of product.entitlements) {
       const entitlement = await this.entitlementRepo.findByUserAndKey(userId, entitlementKey);
       
@@ -541,9 +555,18 @@ export class ProcessBillingEventUseCase {
         if (immediate) {
           entitlement.status = EntitlementStatus.REVOKED;
           entitlement.expiresAt = undefined;
+          
+          // Remove regular limit (from subscriptions) but preserve permanent limit (from one-time payments)
+          if (entitlement.usage) {
+            entitlement.usage.limit = 0; // Remove subscription limit
+            // permanentLimit is preserved - never removed
+            entitlement.usage.resetStrategy = undefined; // Remove reset strategy
+            entitlement.usage.resetAt = undefined; // Remove reset date
+          }
         } else if (expiresAt) {
           // Set expiration date but keep active until then
           entitlement.expiresAt = expiresAt;
+          // Limits remain until expiration
         }
         await this.entitlementRepo.update(entitlement);
       }

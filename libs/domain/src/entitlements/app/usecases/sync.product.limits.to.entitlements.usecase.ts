@@ -8,6 +8,7 @@ export interface SyncProductLimitsInput {
   productId: string;
   userId: string;
   isAddon?: boolean; // If true, limits are added to existing limits instead of overwriting
+  isOneTimePayment?: boolean; // If true, limits are added as permanent limits that cannot be removed
 }
 
 export class SyncProductLimitsToEntitlementsUseCase {
@@ -24,6 +25,7 @@ export class SyncProductLimitsToEntitlementsUseCase {
 
     const entitlements = await this.entitlementRepo.findByUser(input.userId);
     const isAddon = input.isAddon || false;
+    const isOneTimePayment = input.isOneTimePayment || false;
 
     // For each usage limit in the product, sync to corresponding entitlements
     for (const usageLimit of product.usageLimits) {
@@ -35,8 +37,9 @@ export class SyncProductLimitsToEntitlementsUseCase {
         continue;
       }
 
-      // Check if usage should be reset before updating
-      const shouldReset = entitlement.usage?.shouldReset() || false;
+      // For one-time payments, don't reset usage - permanent limits accumulate
+      // For subscriptions, check if usage should be reset before updating
+      const shouldReset = !isOneTimePayment && (entitlement.usage?.shouldReset() || false);
       if (shouldReset && entitlement.usage) {
         entitlement.usage.reset();
         console.log(`Reset usage for entitlement ${entitlement.key} before syncing limits`);
@@ -45,37 +48,51 @@ export class SyncProductLimitsToEntitlementsUseCase {
       // Update entitlement usage limit
       const resetStrategy = this.createResetStrategyFromPeriod(usageLimit.period);
       
+      // Determine if this limit should always increment (for certain reset types)
+      // Lifetime and one-time purchases always increment
+      const shouldAlwaysIncrement = isOneTimePayment || usageLimit.period === "lifetime";
+      
       if (entitlement.usage) {
         // Update existing usage
         const currentUsed = entitlement.usage.used;
         
-        if (isAddon) {
-          // Add-on: Add to existing limit (additive)
+        if (isOneTimePayment) {
+          // One-time payment: Add to permanent limit (cannot be removed)
+          // Permanent limits persist even if subscription is canceled
+          const currentPermanentLimit = entitlement.usage.permanentLimit || 0;
+          entitlement.usage.permanentLimit = currentPermanentLimit + usageLimit.limit;
+          console.log(`One-time payment ${input.productId}: Added ${usageLimit.limit} to permanent limit for ${entitlement.key}, permanent limit: ${entitlement.usage.permanentLimit}`);
+        } else if (isAddon || shouldAlwaysIncrement) {
+          // Add-on or always-increment: Add to existing limit (additive)
           entitlement.usage.limit = entitlement.usage.limit + usageLimit.limit;
-          console.log(`Add-on ${input.productId}: Added ${usageLimit.limit} to ${entitlement.key}, new limit: ${entitlement.usage.limit}`);
+          console.log(`${isAddon ? 'Add-on' : 'Product'} ${input.productId}: Added ${usageLimit.limit} to ${entitlement.key}, new limit: ${entitlement.usage.limit}`);
         } else {
-          // Base product: Set limit (overwrite)
+          // Base product subscription: Set limit (overwrite)
           entitlement.usage.limit = usageLimit.limit;
         }
         
-        // Update reset strategy (use the most frequent reset if multiple products have same entitlement)
-        // For billing_cycle, keep existing strategy if it's already billing_cycle
-        if (resetStrategy && resetStrategy.period === "billing_cycle") {
-          entitlement.usage.resetStrategy = resetStrategy;
-        } else if (resetStrategy && (!entitlement.usage.resetStrategy || entitlement.usage.resetStrategy.period !== "billing_cycle")) {
-          entitlement.usage.resetStrategy = resetStrategy;
-        }
-        
-        // Calculate next reset date
-        if (entitlement.usage.resetStrategy && entitlement.usage.resetStrategy.type === "periodic") {
-          // If we just reset, resetAt was already calculated by reset()
-          // For billing_cycle, don't calculate here - it will be set from subscription period end
-          if (!shouldReset && entitlement.usage.resetStrategy.period !== "billing_cycle") {
-            entitlement.usage.resetAt = this.calculateNextResetDate(entitlement.usage.resetStrategy, new Date());
+        // For one-time payments, don't update reset strategy (keep existing if any)
+        // For subscriptions, update reset strategy
+        if (!isOneTimePayment) {
+          // Update reset strategy (use the most frequent reset if multiple products have same entitlement)
+          // For billing_cycle, keep existing strategy if it's already billing_cycle
+          if (resetStrategy && resetStrategy.period === "billing_cycle") {
+            entitlement.usage.resetStrategy = resetStrategy;
+          } else if (resetStrategy && (!entitlement.usage.resetStrategy || entitlement.usage.resetStrategy.period !== "billing_cycle")) {
+            entitlement.usage.resetStrategy = resetStrategy;
           }
-          // If billing_cycle and resetAt is not set, it will be set when subscription renews
-        } else {
-          entitlement.usage.resetAt = undefined;
+          
+          // Calculate next reset date
+          if (entitlement.usage.resetStrategy && entitlement.usage.resetStrategy.type === "periodic") {
+            // If we just reset, resetAt was already calculated by reset()
+            // For billing_cycle, don't calculate here - it will be set from subscription period end
+            if (!shouldReset && entitlement.usage.resetStrategy.period !== "billing_cycle") {
+              entitlement.usage.resetAt = this.calculateNextResetDate(entitlement.usage.resetStrategy, new Date());
+            }
+            // If billing_cycle and resetAt is not set, it will be set when subscription renews
+          } else {
+            entitlement.usage.resetAt = undefined;
+          }
         }
         
         // Preserve used count (unless we just reset it)
@@ -84,16 +101,28 @@ export class SyncProductLimitsToEntitlementsUseCase {
         }
       } else {
         // Create new usage tracking
-        const resetAt = resetStrategy && resetStrategy.type === "periodic" 
-          ? this.calculateNextResetDate(resetStrategy, new Date())
-          : undefined;
-        
-        entitlement.usage = new EntitlementUsage(
-          usageLimit.limit,
-          0,
-          resetAt,
-          resetStrategy
-        );
+        if (isOneTimePayment) {
+          // One-time payment: Set permanent limit, no reset strategy
+          entitlement.usage = new EntitlementUsage(
+            0, // Base limit is 0 for one-time payments
+            0,
+            undefined, // No reset date for one-time payments
+            undefined, // No reset strategy for one-time payments
+            usageLimit.limit // Permanent limit
+          );
+        } else {
+          // Subscription: Create with reset strategy
+          const resetAt = resetStrategy && resetStrategy.type === "periodic" 
+            ? this.calculateNextResetDate(resetStrategy, new Date())
+            : undefined;
+          
+          entitlement.usage = new EntitlementUsage(
+            usageLimit.limit,
+            0,
+            resetAt,
+            resetStrategy
+          );
+        }
       }
 
       await this.entitlementRepo.update(entitlement);

@@ -64,6 +64,7 @@ export class StripeClient {
   async createCheckoutSession(params: {
     customerId: string;
     priceId: string;
+    mode?: "payment" | "subscription"; // Defaults to "subscription" for backward compatibility
     addonLineItems?: Array<{ priceId: string; productId: string }>;
     successUrl: string;
     cancelUrl: string;
@@ -76,8 +77,8 @@ export class StripeClient {
       },
     ];
 
-    // Add add-on line items
-    if (params.addonLineItems && params.addonLineItems.length > 0) {
+    // Add add-on line items (only for subscriptions)
+    if (params.mode !== "payment" && params.addonLineItems && params.addonLineItems.length > 0) {
       for (const addon of params.addonLineItems) {
         lineItems.push({
           price: addon.priceId,
@@ -86,19 +87,24 @@ export class StripeClient {
       }
     }
 
-    return await this.client.checkout.sessions.create({
+    const mode = params.mode || "subscription";
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       customer: params.customerId,
       line_items: lineItems,
-      mode: "subscription",
+      mode,
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
       metadata: params.metadata || {},
-      // subscription_data.metadata ensures metadata is attached to the subscription when created
-      // This is critical for linking subscriptions back to internal products
-      subscription_data: {
+    };
+
+    // Only include subscription_data for subscription mode
+    if (mode === "subscription") {
+      sessionParams.subscription_data = {
         metadata: params.metadata || {},
-      },
-    });
+      };
+    }
+
+    return await this.client.checkout.sessions.create(sessionParams);
   }
 
   async retrieveProduct(productId: string): Promise<Stripe.Product> {

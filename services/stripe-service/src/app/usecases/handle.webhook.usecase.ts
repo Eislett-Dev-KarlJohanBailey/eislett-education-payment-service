@@ -28,6 +28,9 @@ export class HandleWebhookUseCase {
     try {
       // Process event based on type
       switch (event.type) {
+        case "checkout.session.completed":
+          await this.handleCheckoutSessionCompleted(event);
+          break;
         case "payment_intent.succeeded":
           await this.handlePaymentSucceeded(event);
           break;
@@ -65,9 +68,61 @@ export class HandleWebhookUseCase {
     }
   }
 
+  /**
+   * Handles checkout.session.completed event
+   * This is the primary event for one-time payments (mode: "payment")
+   * For subscriptions, subscription.created is used instead
+   */
+  private async handleCheckoutSessionCompleted(event: Stripe.Event): Promise<void> {
+    const session = event.data.object as Stripe.Checkout.Session;
+    
+    // Only handle one-time payments (mode: "payment")
+    // Subscriptions are handled by subscription.created
+    if (session.mode !== "payment") {
+      console.log(`Skipping checkout.session.completed for mode: ${session.mode} (not a one-time payment)`);
+      return;
+    }
+
+    const customer = await this.customerRepo.findByStripeCustomerId(session.customer as string);
+    if (!customer) {
+      throw new Error(`Customer not found for Stripe customer ID: ${session.customer}`);
+    }
+
+    // Get productId and priceId from metadata
+    const productId = session.metadata?.productId;
+    const priceId = session.metadata?.priceId || "";
+    const billingType = session.metadata?.billingType || "one_time";
+
+    if (!productId) {
+      console.log(`Checkout session completed but no productId in metadata, skipping`);
+      return;
+    }
+
+    const billingEvent: BillingEvent.PaymentSuccessfulEvent = {
+      type: BillingEvent.PaymentEventType.PAYMENT_SUCCESSFUL,
+      payload: {
+        paymentIntentId: session.payment_intent as string || session.id,
+        userId: customer.userId,
+        amount: (session.amount_total || 0) / 100,
+        currency: (session.currency || "usd").toUpperCase(),
+        priceId,
+        productId,
+        billingType: billingType as "one_time" | "recurring",
+        provider: "stripe",
+      },
+      meta: this.eventPublisher.createMetadata("stripe"),
+      version: 1,
+    };
+
+    await this.eventPublisher.publish(billingEvent);
+  }
+
   private async handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
     const customer = await this.getCustomerFromPaymentIntent(paymentIntent);
+
+    // Determine billing type from metadata (defaults to one_time if no subscription)
+    const billingType = paymentIntent.metadata?.billingType || "one_time";
 
     const billingEvent: BillingEvent.PaymentSuccessfulEvent = {
       type: BillingEvent.PaymentEventType.PAYMENT_SUCCESSFUL,
@@ -78,6 +133,7 @@ export class HandleWebhookUseCase {
         currency: paymentIntent.currency.toUpperCase(),
         priceId: paymentIntent.metadata.priceId || "",
         productId: paymentIntent.metadata.productId,
+        billingType: billingType as "one_time" | "recurring",
         provider: "stripe",
       },
       meta: this.eventPublisher.createMetadata("stripe"),
@@ -245,6 +301,9 @@ export class HandleWebhookUseCase {
       }
     }
 
+    // Determine billing type: one-time if no subscription, recurring if subscription exists
+    const billingType = subscriptionId ? "recurring" : "one_time";
+
     // Publish as payment_successful event
     const billingEvent: BillingEvent.PaymentSuccessfulEvent = {
       type: BillingEvent.PaymentEventType.PAYMENT_SUCCESSFUL,
@@ -256,6 +315,7 @@ export class HandleWebhookUseCase {
         priceId: priceId || "",
         productId: productId,
         subscriptionId: subscriptionId,
+        billingType: billingType as "one_time" | "recurring",
         provider: "stripe",
       },
       meta: this.eventPublisher.createMetadata("stripe"),
