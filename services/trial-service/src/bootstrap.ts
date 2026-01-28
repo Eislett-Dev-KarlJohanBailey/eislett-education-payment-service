@@ -8,6 +8,8 @@ import {
 } from "@libs/domain";
 import { StartTrialUseCase } from "./app/usecases/start.trial.usecase";
 import { StartTrialController } from "./app/controllers/start.trial.controller";
+import { CheckTrialStatusUseCase } from "./app/usecases/check.trial.status.usecase";
+import { CheckTrialStatusController } from "./app/controllers/check.trial.status.controller";
 
 export function bootstrap() {
   const trialsTableName = process.env.TRIALS_TABLE;
@@ -38,7 +40,10 @@ export function bootstrap() {
     syncProductLimitsUseCase
   );
 
+  const checkTrialStatusUseCase = new CheckTrialStatusUseCase(trialRepo);
+
   return {
-    startTrialController: new StartTrialController(startTrialUseCase)
+    startTrialController: new StartTrialController(startTrialUseCase),
+    checkTrialStatusController: new CheckTrialStatusController(checkTrialStatusUseCase)
   };
 }

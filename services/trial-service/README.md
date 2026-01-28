@@ -13,6 +13,7 @@ The Trial Service provides a simple API endpoint that enables users to start fre
 - **Time-Limited**: Default 3-hour trial duration (configurable)
 - **Full Product Access**: Users get full access to all product entitlements and usage limits during the trial
 - **Automatic Expiration**: Trials automatically expire after the configured duration
+- **Trial Status Check**: Check if a user has already trialed a product before attempting to start a new trial
 
 ## Architecture
 
@@ -38,6 +39,47 @@ src/
 - `JWT_ACCESS_TOKEN_SECRET` - JWT secret for authentication (from AWS Secrets Manager)
 
 ## API Endpoints
+
+### Check Trial Status
+
+**Endpoint**: `GET /trial?productId={productId}`
+
+**Headers**:
+- `Authorization: Bearer <jwt_token>` (required)
+
+**Query Parameters**:
+- `productId` (required) - The product ID to check trial status for
+
+**Response** (200 OK):
+```json
+{
+  "hasTrialed": true,
+  "trial": {
+    "startedAt": "2024-01-15T12:30:00.000Z",
+    "expiresAt": "2024-01-15T15:30:00.000Z",
+    "status": "active",
+    "isActive": true
+  }
+}
+```
+
+If user has not trialed the product:
+```json
+{
+  "hasTrialed": false
+}
+```
+
+**Error Responses**:
+
+- `400 Bad Request`: Missing productId
+- `401 Unauthorized`: Missing or invalid JWT token
+
+**Example**:
+```bash
+curl -X GET "https://api.example.com/trial?productId=prod-premium-plan" \
+  -H "Authorization: Bearer <jwt_token>"
+```
 
 ### Start Trial
 
@@ -150,10 +192,11 @@ When a trial is started:
 
 **Flow**:
 1. User browses products
-2. User clicks "Start Free Trial" on a product
-3. System creates 3-hour trial
-4. User can use all product features during trial
-5. After 3 hours, user must purchase to continue
+2. User checks trial status (GET /trial) to see if they've already trialed
+3. If not trialed, user clicks "Start Free Trial" on a product
+4. System creates 3-hour trial
+5. User can use all product features during trial
+6. After 3 hours, user must purchase to continue
 
 ### Use Case 2: Feature Evaluation
 
@@ -248,10 +291,18 @@ curl -X POST http://localhost:3000/trial \
 ### Testing Trial Restriction
 
 ```bash
+# Check if user has trialed (should return hasTrialed: false)
+curl -X GET "http://localhost:3000/trial?productId=prod-premium-plan" \
+  -H "Authorization: Bearer <jwt_token>"
+
 # First trial (should succeed)
 curl -X POST http://localhost:3000/trial \
   -H "Authorization: Bearer <jwt_token>" \
   -d '{"productId": "prod-premium-plan"}'
+
+# Check trial status (should return hasTrialed: true with trial details)
+curl -X GET "http://localhost:3000/trial?productId=prod-premium-plan" \
+  -H "Authorization: Bearer <jwt_token>"
 
 # Second trial (should fail with 409)
 curl -X POST http://localhost:3000/trial \
