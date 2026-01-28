@@ -152,12 +152,18 @@ When processing a billing event:
 
 ## Add-on Processing
 
-Add-ons are processed based on product configuration:
+Add-ons are processed based on product configuration with **additive limit logic**:
 
-- **Limit Increases**: Updates existing entitlement limits (additive)
-- **New Features**: Creates new entitlements for additional features
+- **Limit Increases**: Add-on limits are **added** to existing base product limits (additive, not overwriting)
+  - Example: Base product has 100 AI tokens, add-on adds 50 → Total: 150 tokens
+- **New Features**: Creates new entitlements for additional features that don't exist in base product
 - **Dependencies**: Ensures required add-ons are processed first
 - **Conflicts**: Prevents conflicting add-ons from being active simultaneously
+
+**Add-on Limit Logic:**
+- When an add-on product has the same entitlement key as the base product, its limit is **added** to the existing limit
+- This allows add-ons to increase capacity rather than replace it
+- Base product limits are set (overwritten), add-on limits are added (incremented)
 
 ## Expiration Logic
 
@@ -165,6 +171,32 @@ Add-ons are processed based on product configuration:
 - **Canceled (at period end)**: Expires at `currentPeriodEnd`
 - **Canceled (immediate)**: Revoked immediately
 - **One-off Purchases**: Lifetime (no expiration) unless product specifies
+
+## Billing Cycle Resets
+
+The service automatically detects billing cycle renewals and resets usage accordingly:
+
+**Renewal Detection:**
+- When `subscription.updated` event is received, the service compares `currentPeriodStart` with the previous `expiresAt` (previous period end)
+- If `currentPeriodStart >= expiresAt`, it's detected as a billing cycle renewal
+
+**Usage Reset on Renewal:**
+- For entitlements with `billing_cycle` reset strategy, usage is automatically reset when renewal is detected
+- The `resetAt` date is set to the new `currentPeriodEnd` for the next renewal
+- Usage counter (`used`) is reset to 0
+
+**Other Periodic Resets:**
+- The service also checks `resetAt` dates before syncing limits
+- If `resetAt` has passed, usage is automatically reset for:
+  - Daily resets (`period: "day"`)
+  - Weekly resets (`period: "week"`)
+  - Monthly resets (`period: "month"`)
+  - Yearly resets (`period: "year"`)
+
+**Reset Strategy Priority:**
+- `billing_cycle` resets are triggered by subscription renewal events
+- Other periodic resets are checked automatically before limit syncing
+- Resets preserve the limit value but reset the `used` counter to 0
 
 ## Error Handling
 

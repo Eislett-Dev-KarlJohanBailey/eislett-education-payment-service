@@ -5,7 +5,7 @@ import { StripeCustomerRepository } from "../../infrastructure/stripe-customer.r
 import { StripeClient } from "../../infrastructure/stripe.client";
 import {
   BillingEvent,
-  // GetProductUseCase,
+  GetProductUseCase,
 } from "@libs/domain";
 
 export class HandleWebhookUseCase {
@@ -14,14 +14,14 @@ export class HandleWebhookUseCase {
     private readonly eventPublisher: BillingEventPublisher,
     private readonly customerRepo: StripeCustomerRepository,
     private readonly stripeClient: StripeClient,
-    // private readonly getProductUseCase: GetProductUseCase
+    private readonly getProductUseCase: GetProductUseCase
   ) {}
 
   async execute(event: Stripe.Event): Promise<void> {
     // Check idempotency
     const isProcessed = await this.idempotencyRepo.isProcessed(event.id);
     if (isProcessed) {
-      console.log(`Webhook event ${event.id} already processed, skipping`);
+      console.log(`Webhook event ${event.id} already processed, skipping`, this.getProductUseCase);
       return;
     }
 

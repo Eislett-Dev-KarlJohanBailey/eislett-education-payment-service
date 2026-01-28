@@ -7,6 +7,7 @@ import { EntitlementUsage } from "../../domain/entities/entitlement-usage.entity
 export interface SyncProductLimitsInput {
   productId: string;
   userId: string;
+  isAddon?: boolean; // If true, limits are added to existing limits instead of overwriting
 }
 
 export class SyncProductLimitsToEntitlementsUseCase {
@@ -22,6 +23,7 @@ export class SyncProductLimitsToEntitlementsUseCase {
     }
 
     const entitlements = await this.entitlementRepo.findByUser(input.userId);
+    const isAddon = input.isAddon || false;
 
     // For each usage limit in the product, sync to corresponding entitlements
     for (const usageLimit of product.usageLimits) {
@@ -33,22 +35,53 @@ export class SyncProductLimitsToEntitlementsUseCase {
         continue;
       }
 
+      // Check if usage should be reset before updating
+      const shouldReset = entitlement.usage?.shouldReset() || false;
+      if (shouldReset && entitlement.usage) {
+        entitlement.usage.reset();
+        console.log(`Reset usage for entitlement ${entitlement.key} before syncing limits`);
+      }
+
       // Update entitlement usage limit
       const resetStrategy = this.createResetStrategyFromPeriod(usageLimit.period);
       
       if (entitlement.usage) {
-        // Update existing usage - preserve current used count
+        // Update existing usage
         const currentUsed = entitlement.usage.used;
-        entitlement.usage.limit = usageLimit.limit;
-        entitlement.usage.resetStrategy = resetStrategy;
-        // Calculate next reset date without resetting usage
-        if (resetStrategy && resetStrategy.type === "periodic") {
-          entitlement.usage.resetAt = this.calculateNextResetDate(resetStrategy, new Date());
+        
+        if (isAddon) {
+          // Add-on: Add to existing limit (additive)
+          entitlement.usage.limit = entitlement.usage.limit + usageLimit.limit;
+          console.log(`Add-on ${input.productId}: Added ${usageLimit.limit} to ${entitlement.key}, new limit: ${entitlement.usage.limit}`);
+        } else {
+          // Base product: Set limit (overwrite)
+          entitlement.usage.limit = usageLimit.limit;
+        }
+        
+        // Update reset strategy (use the most frequent reset if multiple products have same entitlement)
+        // For billing_cycle, keep existing strategy if it's already billing_cycle
+        if (resetStrategy && resetStrategy.period === "billing_cycle") {
+          entitlement.usage.resetStrategy = resetStrategy;
+        } else if (resetStrategy && (!entitlement.usage.resetStrategy || entitlement.usage.resetStrategy.period !== "billing_cycle")) {
+          entitlement.usage.resetStrategy = resetStrategy;
+        }
+        
+        // Calculate next reset date
+        if (entitlement.usage.resetStrategy && entitlement.usage.resetStrategy.type === "periodic") {
+          // If we just reset, resetAt was already calculated by reset()
+          // For billing_cycle, don't calculate here - it will be set from subscription period end
+          if (!shouldReset && entitlement.usage.resetStrategy.period !== "billing_cycle") {
+            entitlement.usage.resetAt = this.calculateNextResetDate(entitlement.usage.resetStrategy, new Date());
+          }
+          // If billing_cycle and resetAt is not set, it will be set when subscription renews
         } else {
           entitlement.usage.resetAt = undefined;
         }
-        // Restore used count (reset() would have cleared it)
-        entitlement.usage.used = currentUsed;
+        
+        // Preserve used count (unless we just reset it)
+        if (!shouldReset) {
+          entitlement.usage.used = currentUsed;
+        }
       } else {
         // Create new usage tracking
         const resetAt = resetStrategy && resetStrategy.type === "periodic" 
@@ -130,6 +163,12 @@ export class SyncProductLimitsToEntitlementsUseCase {
         nextReset.setMonth(0);
         nextReset.setDate(1);
         nextReset.setHours(strategy.hour || 0, 0, 0, 0);
+        break;
+      case "billing_cycle":
+        // For billing_cycle, we can't calculate the next reset date here
+        // It will be set when the subscription renews (based on currentPeriodEnd)
+        // Return a far future date as placeholder - actual reset happens on subscription.updated
+        nextReset.setFullYear(nextReset.getFullYear() + 10);
         break;
       default:
         nextReset.setDate(nextReset.getDate() + 1);

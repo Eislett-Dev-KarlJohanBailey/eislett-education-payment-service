@@ -84,11 +84,11 @@ export class ProcessBillingEventUseCase {
     const { userId, productId, currentPeriodEnd } = event.payload;
     const expiresAt = new Date(currentPeriodEnd);
 
-    // Create entitlements from product
-    await this.createEntitlementsFromProduct(userId, productId, role, expiresAt);
+    // Create entitlements from product (not a renewal, it's a new subscription)
+    await this.createEntitlementsFromProduct(userId, productId, role, expiresAt, false);
 
     // Process add-ons
-    await this.processAddons(userId, productId, role, expiresAt);
+    await this.processAddons(userId, productId, role, expiresAt, false);
 
     // Publish events for created entitlements
     await this.publishEntitlementEvents(userId, productId, "subscription.created", event.meta);
@@ -98,14 +98,18 @@ export class ProcessBillingEventUseCase {
     event: SubscriptionUpdatedEvent,
     role: EntitlementRole
   ): Promise<void> {
-    const { userId, productId, currentPeriodEnd } = event.payload;
+    const { userId, productId, currentPeriodStart, currentPeriodEnd } = event.payload;
     const expiresAt = new Date(currentPeriodEnd);
+    const newPeriodStart = new Date(currentPeriodStart);
+
+    // Detect if this is a billing cycle renewal (new period started)
+    const isRenewal = await this.isBillingCycleRenewal(userId, productId, newPeriodStart);
 
     // Update entitlements (recreate/update)
-    await this.createEntitlementsFromProduct(userId, productId, role, expiresAt);
+    await this.createEntitlementsFromProduct(userId, productId, role, expiresAt, isRenewal);
 
     // Process add-ons (may have changed)
-    await this.processAddons(userId, productId, role, expiresAt);
+    await this.processAddons(userId, productId, role, expiresAt, isRenewal);
 
     await this.publishEntitlementEvents(userId, productId, "subscription.updated", event.meta);
   }
@@ -153,8 +157,8 @@ export class ProcessBillingEventUseCase {
     const expiresAt = new Date(currentPeriodEnd);
     const userRole = EntitlementRole.LEARNER; // Default role
 
-    // Re-activate entitlements
-    await this.createEntitlementsFromProduct(userId, productId, userRole, expiresAt);
+    // Re-activate entitlements (not a renewal, just resuming)
+    await this.createEntitlementsFromProduct(userId, productId, userRole, expiresAt, false);
 
     await this.publishEntitlementEvents(userId, productId, "subscription.resumed", event.meta);
   }
@@ -171,7 +175,8 @@ export class ProcessBillingEventUseCase {
     }
 
     // For one-off purchases, create entitlements (no expiration unless product specifies)
-    await this.createEntitlementsFromProduct(userId, productId, role, undefined);
+    // Not a renewal, it's a new purchase
+    await this.createEntitlementsFromProduct(userId, productId, role, undefined, false);
 
     await this.publishEntitlementEvents(userId, productId, "payment.successful", event.meta);
   }
@@ -228,7 +233,8 @@ export class ProcessBillingEventUseCase {
     userId: string,
     productId: string,
     role: EntitlementRole,
-    expiresAt?: Date
+    expiresAt?: Date,
+    isRenewal = false
   ): Promise<void> {
     // Get product details
     const product = await this.productRepo.findById(productId);
@@ -248,6 +254,27 @@ export class ProcessBillingEventUseCase {
         if (expiresAt) {
           existing.expiresAt = expiresAt;
         }
+        
+        // Reset usage if billing cycle renewed and entitlement has billing_cycle reset strategy
+        if (isRenewal && existing.usage?.resetStrategy?.period === "billing_cycle") {
+          // Reset usage and set next reset date to the new period end
+          existing.usage.reset();
+          if (expiresAt) {
+            existing.usage.resetAt = expiresAt;
+          }
+          console.log(`Reset usage for entitlement ${entitlementKey} due to billing cycle renewal, next reset: ${expiresAt?.toISOString()}`);
+        } else if (existing.usage && existing.usage.shouldReset()) {
+          // Check and reset for other periodic resets (day, week, month, etc.)
+          existing.usage.reset();
+          console.log(`Reset usage for entitlement ${entitlementKey} due to reset period`);
+        } else if (isRenewal && existing.usage && expiresAt) {
+          // Even if not billing_cycle, update resetAt if it's a renewal and we have expiresAt
+          // This ensures billing_cycle resets are scheduled correctly
+          if (existing.usage.resetStrategy?.period === "billing_cycle") {
+            existing.usage.resetAt = expiresAt;
+          }
+        }
+        
         await this.entitlementRepo.update(existing);
       } else {
         // Create new entitlement
@@ -260,21 +287,24 @@ export class ProcessBillingEventUseCase {
       }
     }
 
-    // Sync product usage limits to entitlements
+    // Sync product usage limits to entitlements (will handle additive logic for add-ons)
     await this.syncProductLimitsUseCase.execute({
       productId,
-      userId
+      userId,
+      isAddon: false // Base product, not add-on
     });
   }
 
   /**
    * Processes add-ons for a product subscription
+   * Add-ons are processed additively - they increase limits rather than overwrite
    */
   private async processAddons(
     userId: string,
     productId: string,
     role: EntitlementRole,
-    expiresAt?: Date
+    expiresAt?: Date,
+    isRenewal = false
   ): Promise<void> {
     const product = await this.productRepo.findById(productId);
     
@@ -288,22 +318,132 @@ export class ProcessBillingEventUseCase {
 
     // Process addonConfigs
     for (const addonConfig of addonConfigs) {
-      await this.createEntitlementsFromProduct(
+      await this.processAddonProduct(
         userId,
         addonConfig.productId,
         role,
-        expiresAt
+        expiresAt,
+        isRenewal
       );
     }
 
     // Process legacy addons
     for (const addonProductId of legacyAddons) {
-      await this.createEntitlementsFromProduct(
+      await this.processAddonProduct(
         userId,
         addonProductId,
         role,
-        expiresAt
+        expiresAt,
+        isRenewal
       );
+    }
+  }
+
+  /**
+   * Processes a single add-on product with additive limit logic
+   */
+  private async processAddonProduct(
+    userId: string,
+    addonProductId: string,
+    role: EntitlementRole,
+    expiresAt?: Date,
+    isRenewal = false
+  ): Promise<void> {
+    const addonProduct = await this.productRepo.findById(addonProductId);
+    
+    if (!addonProduct) {
+      console.warn(`Add-on product ${addonProductId} not found, skipping`);
+      return;
+    }
+
+    // Create entitlements for add-on (if they don't exist)
+    for (const entitlementKey of addonProduct.entitlements) {
+      const existing = await this.entitlementRepo.findByUserAndKey(userId, entitlementKey);
+      
+      if (!existing) {
+        // Create new entitlement for add-on feature
+        await this.createEntitlementUseCase.execute({
+          userId,
+          key: entitlementKey as EntitlementKey,
+          role,
+          expiresAt
+        });
+      } else {
+        // Update existing entitlement
+        existing.status = EntitlementStatus.ACTIVE;
+        if (expiresAt) {
+          existing.expiresAt = expiresAt;
+        }
+        
+        // Reset usage if billing cycle renewed
+        if (isRenewal && existing.usage?.resetStrategy?.period === "billing_cycle") {
+          existing.usage.reset();
+          if (expiresAt) {
+            existing.usage.resetAt = expiresAt;
+          }
+          console.log(`Reset usage for add-on entitlement ${entitlementKey} due to billing cycle renewal`);
+        } else if (existing.usage && existing.usage.shouldReset()) {
+          existing.usage.reset();
+        } else if (isRenewal && existing.usage && expiresAt) {
+          // Update resetAt for billing_cycle even if we didn't reset
+          if (existing.usage.resetStrategy?.period === "billing_cycle") {
+            existing.usage.resetAt = expiresAt;
+          }
+        }
+        
+        await this.entitlementRepo.update(existing);
+      }
+    }
+
+    // Sync add-on limits additively (increases existing limits)
+    await this.syncProductLimitsUseCase.execute({
+      productId: addonProductId,
+      userId,
+      isAddon: true // Mark as add-on for additive logic
+    });
+  }
+
+  /**
+   * Detects if a subscription update represents a billing cycle renewal
+   * A renewal occurs when the new period start is at or after the previous period end
+   * 
+   * Logic:
+   * - If entitlement.expiresAt (previous period end) exists and newPeriodStart >= expiresAt, it's a renewal
+   * - This means the subscription has moved to a new billing period
+   */
+  private async isBillingCycleRenewal(
+    userId: string,
+    productId: string,
+    newPeriodStart: Date
+  ): Promise<boolean> {
+    try {
+      // Get product to find its entitlements
+      const product = await this.productRepo.findById(productId);
+      if (!product) {
+        return false;
+      }
+
+      // Check if any entitlement's expiresAt (previous period end) is at or before new period start
+      // If newPeriodStart >= expiresAt, the subscription has moved to a new billing period
+      for (const entitlementKey of product.entitlements) {
+        const entitlement = await this.entitlementRepo.findByUserAndKey(userId, entitlementKey);
+        
+        if (entitlement?.expiresAt) {
+          // Allow small buffer (1 second) to handle timing edge cases
+          const timeDiff = newPeriodStart.getTime() - entitlement.expiresAt.getTime();
+          // If new period start is at or after previous period end (within 1 second tolerance), it's a renewal
+          if (timeDiff >= -1000) {
+            console.log(`Billing cycle renewal detected: newPeriodStart=${newPeriodStart.toISOString()}, previousExpiresAt=${entitlement.expiresAt.toISOString()}`);
+            return true;
+          }
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.error(`Error detecting billing cycle renewal:`, error);
+      // Default to false on error to avoid false resets
+      return false;
     }
   }
 
