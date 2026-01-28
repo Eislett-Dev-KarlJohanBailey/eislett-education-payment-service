@@ -13,5 +13,8 @@ export interface PaymentPayload {
   
     failureCode?: string;
     failureReason?: string;
+    
+    portalUrl?: string; // Stripe Customer Portal URL for resolving billing issues
+    expiresAt?: string; // ISO 8601 timestamp when the payment/action expires
   }
   

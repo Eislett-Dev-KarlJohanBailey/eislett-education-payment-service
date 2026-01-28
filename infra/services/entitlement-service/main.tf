@@ -55,6 +55,17 @@ data "terraform_remote_state" "access_service" {
   }
 }
 
+# Optional: Dunning service remote state (may not exist on first deployment)
+data "terraform_remote_state" "dunning_service" {
+  backend = "s3"
+
+  config = {
+    bucket = "${var.project_name}-${var.environment}-dunning-service-state"
+    key    = "tf-infra/${var.environment}.tfstate"
+    region = "us-east-1"
+  }
+}
+
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
@@ -179,13 +190,13 @@ module "entitlement_iam_role" {
   role_name = "entitlement-lambda-role-${var.environment}"
 
   # DynamoDB permissions
-  dynamodb_table_arns = [
+  dynamodb_table_arns = concat([
     data.terraform_remote_state.product_service.outputs.products_table_arn,
     "${data.terraform_remote_state.product_service.outputs.products_table_arn}/index/*",
     data.terraform_remote_state.access_service.outputs.entitlements_table_arn,
     "${data.terraform_remote_state.access_service.outputs.entitlements_table_arn}/index/*",
     aws_dynamodb_table.processed_events.arn
-  ]
+  ], try([data.terraform_remote_state.dunning_service.outputs.dunning_table_arn], []))
 
   tags = {
     Environment = var.environment
@@ -243,12 +254,14 @@ module "entitlement_lambda" {
   filename      = abspath("${path.cwd}/services/entitlement-service/function.zip")
   iam_role_arn  = module.entitlement_iam_role.role_arn
 
-  environment_variables = {
+  environment_variables = merge({
     PRODUCTS_TABLE                = data.terraform_remote_state.product_service.outputs.products_table_name
     ENTITLEMENTS_TABLE            = data.terraform_remote_state.access_service.outputs.entitlements_table_name
     PROCESSED_EVENTS_TABLE        = aws_dynamodb_table.processed_events.name
     ENTITLEMENT_UPDATES_TOPIC_ARN = aws_sns_topic.entitlement_updates.arn
-  }
+  }, try({
+    DUNNING_TABLE = data.terraform_remote_state.dunning_service.outputs.dunning_table_name
+  }, {}))
 }
 
 # Lambda Event Source Mapping (SQS Trigger)

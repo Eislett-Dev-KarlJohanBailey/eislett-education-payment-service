@@ -153,6 +153,20 @@ export class StripeClient {
     });
   }
 
+  /**
+   * Creates a Stripe Customer Portal session for managing billing
+   * This allows customers to update payment methods, view invoices, and resolve billing issues
+   */
+  async createPortalSession(params: {
+    customerId: string;
+    returnUrl: string;
+  }): Promise<Stripe.BillingPortal.Session> {
+    return await this.client.billingPortal.sessions.create({
+      customer: params.customerId,
+      return_url: params.returnUrl,
+    });
+  }
+
   constructEvent(
     payload: string | Buffer,
     signature: string,

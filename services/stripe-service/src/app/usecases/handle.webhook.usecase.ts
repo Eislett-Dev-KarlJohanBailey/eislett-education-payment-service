@@ -37,6 +37,12 @@ export class HandleWebhookUseCase {
         case "payment_intent.requires_action":
           await this.handlePaymentActionRequired(event);
           break;
+        case "invoice.payment_failed":
+          await this.handleInvoicePaymentFailed(event);
+          break;
+        case "invoice.paid":
+          await this.handleInvoicePaid(event);
+          break;
         case "customer.subscription.created":
           await this.handleSubscriptionCreated(event);
           break;
@@ -85,6 +91,14 @@ export class HandleWebhookUseCase {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
     const customer = await this.getCustomerFromPaymentIntent(paymentIntent);
 
+    // Generate portal URL for resolving billing issues
+    const portalUrl = await this.generatePortalUrl(customer.stripeCustomerId);
+
+    // Calculate expiresAt - payment intents typically expire after 24 hours
+    const expiresAt = paymentIntent.canceled_at 
+      ? new Date(paymentIntent.canceled_at * 1000).toISOString()
+      : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours from now
+
     const billingEvent: BillingEvent.PaymentFailedEvent = {
       type: BillingEvent.PaymentEventType.PAYMENT_FAILED,
       payload: {
@@ -97,6 +111,8 @@ export class HandleWebhookUseCase {
         provider: "stripe",
         failureCode: paymentIntent.last_payment_error?.code,
         failureReason: paymentIntent.last_payment_error?.message,
+        portalUrl,
+        expiresAt,
       },
       meta: this.eventPublisher.createMetadata("stripe"),
       version: 1,
@@ -109,6 +125,14 @@ export class HandleWebhookUseCase {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
     const customer = await this.getCustomerFromPaymentIntent(paymentIntent);
 
+    // Generate portal URL for resolving billing issues
+    const portalUrl = await this.generatePortalUrl(customer.stripeCustomerId);
+
+    // Calculate expiresAt - payment intents typically expire after 24 hours
+    const expiresAt = paymentIntent.canceled_at 
+      ? new Date(paymentIntent.canceled_at * 1000).toISOString()
+      : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours from now
+
     const billingEvent: BillingEvent.PaymentActionRequiredEvent = {
       type: BillingEvent.PaymentEventType.PAYMENT_ACTION_REQUIRED,
       payload: {
@@ -119,12 +143,133 @@ export class HandleWebhookUseCase {
         priceId: paymentIntent.metadata.priceId || "",
         productId: paymentIntent.metadata.productId,
         provider: "stripe",
+        portalUrl,
+        expiresAt,
       },
       meta: this.eventPublisher.createMetadata("stripe"),
       version: 1,
     };
 
     await this.eventPublisher.publish(billingEvent);
+  }
+
+  private async handleInvoicePaymentFailed(event: Stripe.Event): Promise<void> {
+    const invoice = event.data.object as Stripe.Invoice;
+    const customer = await this.customerRepo.findByStripeCustomerId(invoice.customer as string);
+    
+    if (!customer) {
+      throw new Error(`Customer not found for Stripe customer ID: ${invoice.customer}`);
+    }
+
+    // Generate portal URL for resolving billing issues
+    const portalUrl = await this.generatePortalUrl(customer.stripeCustomerId);
+
+    // Calculate expiresAt - invoices typically have a due date
+    const expiresAt = invoice.due_date 
+      ? new Date(invoice.due_date * 1000).toISOString()
+      : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours from now
+
+    // Get subscription/product info from invoice
+    const subscriptionId = invoice.subscription as string | undefined;
+    let productId: string | undefined;
+    let priceId: string | undefined;
+
+    if (subscriptionId) {
+      try {
+        const subscription = await this.stripeClient.retrieveSubscription(subscriptionId);
+        productId = await this.resolveProductId(subscription);
+        priceId = subscription.items.data[0]?.price.id || subscription.metadata.priceId || "";
+      } catch (error) {
+        console.error(`Error retrieving subscription ${subscriptionId} for invoice:`, error);
+      }
+    }
+
+    // Publish as payment_failed event (same type, invoice is just another source)
+    const billingEvent: BillingEvent.PaymentFailedEvent = {
+      type: BillingEvent.PaymentEventType.PAYMENT_FAILED,
+      payload: {
+        paymentIntentId: invoice.payment_intent as string || invoice.id,
+        userId: customer.userId,
+        amount: invoice.amount_due / 100,
+        currency: invoice.currency.toUpperCase(),
+        priceId: priceId || "",
+        productId: productId,
+        subscriptionId: subscriptionId,
+        provider: "stripe",
+        failureCode: invoice.last_payment_error?.code,
+        failureReason: invoice.last_payment_error?.message,
+        portalUrl,
+        expiresAt,
+      },
+      meta: this.eventPublisher.createMetadata("stripe"),
+      version: 1,
+    };
+
+    await this.eventPublisher.publish(billingEvent);
+  }
+
+  private async handleInvoicePaid(event: Stripe.Event): Promise<void> {
+    const invoice = event.data.object as Stripe.Invoice;
+    const customer = await this.customerRepo.findByStripeCustomerId(invoice.customer as string);
+    
+    if (!customer) {
+      throw new Error(`Customer not found for Stripe customer ID: ${invoice.customer}`);
+    }
+
+    // Get subscription/product info from invoice
+    const subscriptionId = invoice.subscription as string | undefined;
+    let productId: string | undefined;
+    let priceId: string | undefined;
+
+    if (subscriptionId) {
+      try {
+        const subscription = await this.stripeClient.retrieveSubscription(subscriptionId);
+        productId = await this.resolveProductId(subscription);
+        priceId = subscription.items.data[0]?.price.id || subscription.metadata.priceId || "";
+      } catch (error) {
+        console.error(`Error retrieving subscription ${subscriptionId} for invoice:`, error);
+      }
+    }
+
+    // Publish as payment_successful event
+    const billingEvent: BillingEvent.PaymentSuccessfulEvent = {
+      type: BillingEvent.PaymentEventType.PAYMENT_SUCCESSFUL,
+      payload: {
+        paymentIntentId: invoice.payment_intent as string || invoice.id,
+        userId: customer.userId,
+        amount: invoice.amount_paid / 100,
+        currency: invoice.currency.toUpperCase(),
+        priceId: priceId || "",
+        productId: productId,
+        subscriptionId: subscriptionId,
+        provider: "stripe",
+      },
+      meta: this.eventPublisher.createMetadata("stripe"),
+      version: 1,
+    };
+
+    await this.eventPublisher.publish(billingEvent);
+  }
+
+  /**
+   * Generates a Stripe Customer Portal session URL for resolving billing issues
+   */
+  private async generatePortalUrl(stripeCustomerId: string): Promise<string> {
+    try {
+      // Use a default return URL - in production, this should be configurable
+      const returnUrl = process.env.PORTAL_RETURN_URL || "https://app.is-ed.com/billing";
+      
+      const portalSession = await this.stripeClient.createPortalSession({
+        customerId: stripeCustomerId,
+        returnUrl,
+      });
+
+      return portalSession.url;
+    } catch (error) {
+      console.error(`Error generating portal URL for customer ${stripeCustomerId}:`, error);
+      // Return empty string if portal generation fails - dunning service can regenerate
+      return "";
+    }
   }
 
   /**

@@ -6,7 +6,9 @@ import {
   CreateEntitlementUseCase,
   SyncProductLimitsToEntitlementsUseCase,
   ProductRepositoryPorts,
-  BillingEvent
+  BillingEvent,
+  DunningRepository,
+  DunningState,
 } from "@libs/domain";
 import { EntitlementEventPublisher } from "../../infrastructure/event.publisher";
 
@@ -27,14 +29,17 @@ export class ProcessBillingEventUseCase {
     private readonly syncProductLimitsUseCase: SyncProductLimitsToEntitlementsUseCase,
     private readonly eventPublisher: EntitlementEventPublisher,
     private readonly entitlementRepo: EntitlementRepository,
-    private readonly productRepo: ProductRepositoryPorts.ProductRepository
+    private readonly productRepo: ProductRepositoryPorts.ProductRepository,
+    private readonly dunningRepo?: DunningRepository // Optional - only check if available
   ) {}
 
   async execute(event: BillingDomainEvent<any>): Promise<void> {
-    // Filter out irrelevant events
+    // Filter out payment failure events - these are handled by dunning service
+    // Entitlement service should NOT revoke access on payment failures
+    // Dunning service will handle the timeline and revoke only when SUSPENDED
     if (event.type === PaymentEventType.PAYMENT_FAILED || 
         event.type === PaymentEventType.PAYMENT_ACTION_REQUIRED) {
-      console.log(`Skipping irrelevant event: ${event.type}`);
+      console.log(`Skipping payment failure event: ${event.type} - handled by dunning service`);
       return;
     }
 
@@ -459,6 +464,7 @@ export class ProcessBillingEventUseCase {
 
   /**
    * Revokes entitlements for a user based on a product
+   * Checks dunning state to ensure we don't revoke prematurely
    */
   private async revokeEntitlements(
     userId: string,
@@ -466,6 +472,25 @@ export class ProcessBillingEventUseCase {
     immediate: boolean,
     expiresAt?: Date
   ): Promise<void> {
+    // Check dunning state before revoking
+    // Only revoke if dunning state is OK or SUSPENDED
+    // If in ACTION_REQUIRED, GRACE_PERIOD, or RESTRICTED, don't revoke yet
+    // This ensures entitlements are maintained during the dunning grace period
+    if (this.dunningRepo) {
+      const dunningRecord = await this.dunningRepo.findByUserId(userId);
+      if (dunningRecord) {
+        const state = dunningRecord.state;
+        if (state === DunningState.ACTION_REQUIRED || 
+            state === DunningState.GRACE_PERIOD || 
+            state === DunningState.RESTRICTED) {
+          console.log(`Skipping entitlement revocation for user ${userId} - dunning state is ${state}. Access maintained per dunning timeline.`);
+          return; // Don't revoke - dunning service will handle it when state becomes SUSPENDED
+        }
+        // If SUSPENDED, proceed with revocation (dunning service already published revocation event)
+        // If OK, proceed with revocation (normal subscription cancellation/expiration)
+      }
+    }
+
     const product = await this.productRepo.findById(productId);
     
     if (!product) {
