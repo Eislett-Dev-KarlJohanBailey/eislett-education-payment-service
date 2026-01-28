@@ -8,7 +8,7 @@ import {
   DeleteCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { DunningRepository } from "../app/ports/dunning.repository";
-import { DunningRecord, DunningRecordProps } from "../domain/entities/dunning-record.entity";
+import { DunningRecord } from "../domain/entities/dunning-record.entity";
 import { DunningState } from "../domain/value-objects/dunning-state.vo";
 
 interface DunningRecordItem {
