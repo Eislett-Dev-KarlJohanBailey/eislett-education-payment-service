@@ -252,7 +252,7 @@ module "dunning_api_lambda" {
   source = "../../modules/lambda"
 
   function_name = "dunning-service-api"
-  handler       = "dist/handler/api-gateway/handler.apiHandler"
+  handler       = "api-gateway.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/dunning-service/function.zip")
   iam_role_arn  = module.dunning_iam_role.role_arn
