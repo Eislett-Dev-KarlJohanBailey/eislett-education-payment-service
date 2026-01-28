@@ -127,6 +127,38 @@ export class HandleWebhookUseCase {
     await this.eventPublisher.publish(billingEvent);
   }
 
+  /**
+   * Safely extracts current period start/end from subscription, with fallbacks
+   * Handles cases where subscription is incomplete and these fields may be missing
+   */
+  private getSubscriptionPeriodDates(subscription: Stripe.Subscription): {
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+  } {
+    // Try subscription-level fields first
+    let periodStart: number | null | undefined = subscription.current_period_start;
+    let periodEnd: number | null | undefined = subscription.current_period_end;
+
+    // Fallback to subscription items if not available at subscription level
+    if ((!periodStart || !periodEnd) && subscription.items?.data?.[0]) {
+      const firstItem = subscription.items.data[0];
+      periodStart = periodStart ?? (firstItem as any).current_period_start;
+      periodEnd = periodEnd ?? (firstItem as any).current_period_end;
+    }
+
+    // Convert to ISO strings, handling null/undefined
+    // If still missing, use subscription.created or current time as fallback
+    const fallbackTimestamp = subscription.created || Math.floor(Date.now() / 1000);
+    
+    const startTimestamp = periodStart ?? fallbackTimestamp;
+    const endTimestamp = periodEnd ?? fallbackTimestamp;
+
+    return {
+      currentPeriodStart: new Date(startTimestamp * 1000).toISOString(),
+      currentPeriodEnd: new Date(endTimestamp * 1000).toISOString(),
+    };
+  }
+
   private async handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
     const subscription = event.data.object as Stripe.Subscription;
     const customer = await this.customerRepo.findByStripeCustomerId(subscription.customer as string);
@@ -138,6 +170,8 @@ export class HandleWebhookUseCase {
     // Resolve productId from metadata or fallback to Stripe product lookup
     const productId = await this.resolveProductId(subscription);
 
+    const periodDates = this.getSubscriptionPeriodDates(subscription);
+
     const billingEvent: BillingEvent.SubscriptionCreatedEvent = {
       type: BillingEvent.SubscriptionEventType.SUBSCRIPTION_CREATED,
       payload: {
@@ -146,8 +180,8 @@ export class HandleWebhookUseCase {
         productId,
         priceId: subscription.items.data[0]?.price.id || subscription.metadata.priceId || "",
         status: subscription.status as any,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+        currentPeriodStart: periodDates.currentPeriodStart,
+        currentPeriodEnd: periodDates.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
       },
       meta: this.eventPublisher.createMetadata("stripe"),
@@ -168,6 +202,8 @@ export class HandleWebhookUseCase {
     // Resolve productId from metadata or fallback to Stripe product lookup
     const productId = await this.resolveProductId(subscription);
 
+    const periodDates = this.getSubscriptionPeriodDates(subscription);
+
     const billingEvent: BillingEvent.SubscriptionUpdatedEvent = {
       type: BillingEvent.SubscriptionEventType.SUBSCRIPTION_UPDATED,
       payload: {
@@ -176,8 +212,8 @@ export class HandleWebhookUseCase {
         productId,
         priceId: subscription.items.data[0]?.price.id || subscription.metadata.priceId || "",
         status: subscription.status as any,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+        currentPeriodStart: periodDates.currentPeriodStart,
+        currentPeriodEnd: periodDates.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
       },
       meta: this.eventPublisher.createMetadata("stripe"),
@@ -204,6 +240,8 @@ export class HandleWebhookUseCase {
     // Resolve productId from metadata or fallback to Stripe product lookup
     const productId = await this.resolveProductId(subscription);
 
+    const periodDates = this.getSubscriptionPeriodDates(subscription);
+
     const billingEvent = {
       type: eventType,
       payload: {
@@ -212,8 +250,8 @@ export class HandleWebhookUseCase {
         productId,
         priceId: subscription.items.data[0]?.price.id || subscription.metadata.priceId || "",
         status: subscription.status as any,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000).toISOString(),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+        currentPeriodStart: periodDates.currentPeriodStart,
+        currentPeriodEnd: periodDates.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
       },
       meta: this.eventPublisher.createMetadata("stripe"),
