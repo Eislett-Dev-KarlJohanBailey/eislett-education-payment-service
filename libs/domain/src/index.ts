@@ -77,7 +77,3 @@ export * from "./trials/index";
 // Transactions
 
 export * from "./transactions/index";
-
-// Transactions
-
-export * from "./transactions/index";
