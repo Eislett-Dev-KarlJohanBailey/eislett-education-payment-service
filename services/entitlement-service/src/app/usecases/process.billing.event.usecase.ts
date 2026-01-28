@@ -296,23 +296,32 @@ export class ProcessBillingEventUseCase {
       if (existing) {
         // Update existing entitlement
         existing.status = EntitlementStatus.ACTIVE;
-        if (expiresAt) {
+        
+        // For one-time payments: don't set expiration (keep lifetime access)
+        // For subscriptions: set expiration if provided
+        if (isOneTimePayment) {
+          // One-time payment: keep existing expiration if it exists (from previous subscription)
+          // Don't overwrite with undefined - preserve lifetime access
+          // If there's no expiration, keep it that way (lifetime)
+        } else if (expiresAt) {
+          // Subscription: update expiration
           existing.expiresAt = expiresAt;
         }
         
         // Reset usage if billing cycle renewed and entitlement has billing_cycle reset strategy
-        if (isRenewal && existing.usage?.resetStrategy?.period === "billing_cycle") {
+        // Skip reset for one-time payments
+        if (!isOneTimePayment && isRenewal && existing.usage?.resetStrategy?.period === "billing_cycle") {
           // Reset usage and set next reset date to the new period end
           existing.usage.reset();
           if (expiresAt) {
             existing.usage.resetAt = expiresAt;
           }
           console.log(`Reset usage for entitlement ${entitlementKey} due to billing cycle renewal, next reset: ${expiresAt?.toISOString()}`);
-        } else if (existing.usage && existing.usage.shouldReset()) {
+        } else if (!isOneTimePayment && existing.usage && existing.usage.shouldReset()) {
           // Check and reset for other periodic resets (day, week, month, etc.)
           existing.usage.reset();
           console.log(`Reset usage for entitlement ${entitlementKey} due to reset period`);
-        } else if (isRenewal && existing.usage && expiresAt) {
+        } else if (!isOneTimePayment && isRenewal && existing.usage && expiresAt) {
           // Even if not billing_cycle, update resetAt if it's a renewal and we have expiresAt
           // This ensures billing_cycle resets are scheduled correctly
           if (existing.usage.resetStrategy?.period === "billing_cycle") {
@@ -323,11 +332,13 @@ export class ProcessBillingEventUseCase {
         await this.entitlementRepo.update(existing);
       } else {
         // Create new entitlement
+        // For one-time payments: no expiration (lifetime access)
+        // For subscriptions: use provided expiration
         await this.createEntitlementUseCase.execute({
           userId,
           key: entitlementKey as EntitlementKey,
           role,
-          expiresAt
+          expiresAt: isOneTimePayment ? undefined : expiresAt
         });
       }
     }
