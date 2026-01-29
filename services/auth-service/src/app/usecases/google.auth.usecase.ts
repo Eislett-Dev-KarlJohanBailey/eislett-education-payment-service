@@ -4,6 +4,7 @@ import { UserRepository } from "../../infrastructure/repositories/user.repositor
 import { AuthenticationRepository } from "../../infrastructure/repositories/authentication.repository";
 import { UserEntity } from "../../domain/entities/user.entity";
 import { AuthenticationEntity } from "../../domain/entities/authentication.entity";
+import { UserEventPublisher } from "../../infrastructure/event.publisher";
 
 export interface GoogleAuthInput {
   code: string;
@@ -28,7 +29,8 @@ export class GoogleAuthUseCase {
     private readonly googleOAuthClient: GoogleOAuthClient,
     private readonly jwtGenerator: JwtGenerator,
     private readonly userRepo: UserRepository,
-    private readonly authRepo: AuthenticationRepository
+    private readonly authRepo: AuthenticationRepository,
+    private readonly eventPublisher?: UserEventPublisher
   ) {}
 
   async execute(input: GoogleAuthInput): Promise<GoogleAuthOutput> {
@@ -65,6 +67,21 @@ export class GoogleAuthUseCase {
         finalPreferredLanguage
       );
       await this.userRepo.save(user);
+
+      // Publish user created event
+      if (this.eventPublisher) {
+        await this.eventPublisher.publishUserCreated({
+          userId: user.userId,
+          email: user.email,
+          name: user.name,
+          picture: user.picture,
+          role: user.role,
+          preferredLanguage: user.preferredLanguage,
+          provider: "google",
+          providerId: googleUserInfo.id,
+          createdAt: user.createdAt.toISOString(),
+        });
+      }
     } else {
       // Update existing user if needed
       const needsUpdate = 

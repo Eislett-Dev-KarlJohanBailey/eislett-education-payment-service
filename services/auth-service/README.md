@@ -127,6 +127,7 @@ src/
 |--------------------------|-------------|
 | `USERS_TABLE`            | DynamoDB table name for users |
 | `AUTHENTICATIONS_TABLE` | DynamoDB table name for authentications |
+| `USER_EVENTS_TOPIC_ARN`  | SNS topic ARN for publishing user events (optional) |
 | `PROJECT_NAME`           | Project name for Secrets Manager (default: "eislett-education") |
 | `ENVIRONMENT`            | Environment name (default: "dev") |
 
@@ -274,6 +275,89 @@ The service supports preferred language:
 1. Explicit `preferredLanguage` in request (highest priority)
 2. Google's `locale` from user profile
 3. Existing user's `preferredLanguage` (if updating)
+
+## User Events (SNS)
+
+The service publishes user lifecycle events to an SNS topic when users are created or updated.
+
+### Event Types
+
+#### User Created Event
+
+Published when a new user is created during authentication.
+
+**Event Type**: `user.created`
+
+**Payload**:
+```json
+{
+  "type": "user.created",
+  "payload": {
+    "userId": "user-123456789",
+    "email": "user@example.com",
+    "name": "John Doe",
+    "picture": "https://lh3.googleusercontent.com/...",
+    "role": "learner",
+    "preferredLanguage": "en",
+    "provider": "google",
+    "providerId": "123456789",
+    "createdAt": "2024-01-01T00:00:00.000Z"
+  },
+  "meta": {
+    "eventId": "evt_1234567890_abc123",
+    "occurredAt": "2024-01-01T00:00:00.000Z",
+    "source": "auth-service"
+  },
+  "version": 1
+}
+```
+
+#### User Updated Event
+
+Published when a user's profile is updated (currently not implemented, but structure is ready).
+
+**Event Type**: `user.updated`
+
+### Subscribing to Events
+
+To subscribe to user events:
+
+1. **SQS Queue Subscription**:
+   ```terraform
+   resource "aws_sqs_queue" "user_events_queue" {
+     name = "user-events-queue"
+   }
+
+   resource "aws_sns_topic_subscription" "user_events_sqs" {
+     topic_arn = aws_sns_topic.user_events.arn
+     protocol  = "sqs"
+     endpoint  = aws_sqs_queue.user_events_queue.arn
+   }
+   ```
+
+2. **Lambda Subscription**:
+   ```terraform
+   resource "aws_sns_topic_subscription" "user_events_lambda" {
+     topic_arn = aws_sns_topic.user_events.arn
+     protocol  = "lambda"
+     endpoint  = aws_lambda_function.user_handler.arn
+   }
+   ```
+
+3. **Email Subscription** (for testing):
+   ```terraform
+   resource "aws_sns_topic_subscription" "user_events_email" {
+     topic_arn = aws_sns_topic.user_events.arn
+     protocol  = "email"
+     endpoint  = "admin@example.com"
+   }
+   ```
+
+### Event Publishing
+
+- Events are published asynchronously and failures are logged but don't fail the main authentication flow
+- If `USER_EVENTS_TOPIC_ARN` is not set, the service will continue to work but events won't be published
+- Events include `MessageAttributes` with `eventType` for filtering
 
 ## Conditional Build
 

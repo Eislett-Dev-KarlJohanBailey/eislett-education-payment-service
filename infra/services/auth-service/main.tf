@@ -143,6 +143,21 @@ resource "aws_dynamodb_table" "authentications" {
   }
 }
 
+# SNS Topic for User Events
+resource "aws_sns_topic" "user_events" {
+  name = "${var.project_name}-${var.environment}-user-events"
+
+  tags = {
+    Environment = var.environment
+    Service     = "auth-service"
+    Name        = "User Events Topic"
+  }
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
+}
+
 module "auth_service_iam_role" {
   source = "../../modules/lambda_iam_role"
 
@@ -183,6 +198,27 @@ resource "aws_iam_role_policy" "secrets_manager" {
   })
 }
 
+# Additional IAM Policy for SNS
+resource "aws_iam_role_policy" "sns_publish" {
+  name = "auth-service-sns-publish-${var.environment}"
+  role = module.auth_service_iam_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = [
+          aws_sns_topic.user_events.arn
+        ]
+      }
+    ]
+  })
+}
+
 module "auth_service_lambda" {
   source = "../../modules/lambda"
 
@@ -195,6 +231,7 @@ module "auth_service_lambda" {
   environment_variables = {
     USERS_TABLE            = aws_dynamodb_table.users.name
     AUTHENTICATIONS_TABLE  = aws_dynamodb_table.authentications.name
+    USER_EVENTS_TOPIC_ARN  = aws_sns_topic.user_events.arn
     PROJECT_NAME           = var.project_name
     ENVIRONMENT            = var.environment
   }

@@ -8,6 +8,7 @@ import { UpdatePreferredLanguageUseCase } from "./app/usecases/update.user.prefe
 import { UpdatePreferredLanguageController } from "./app/controllers/update.user.preferred.language.controller";
 import { GetCurrentUserUseCase } from "./app/usecases/get.current.user.usecase";
 import { GetCurrentUserController } from "./app/controllers/get.current.user.controller";
+import { UserEventPublisher } from "./infrastructure/event.publisher";
 
 export function bootstrap() {
   const usersTableName = process.env.USERS_TABLE;
@@ -52,11 +53,20 @@ export function bootstrap() {
   // Store init function for use cases to call
   (global as any).__authServiceEnsureInit = ensureInitialized;
 
+  // Initialize event publisher (optional - won't fail if topic ARN not set)
+  let eventPublisher: UserEventPublisher | undefined;
+  try {
+    eventPublisher = new UserEventPublisher();
+  } catch (error) {
+    console.warn("UserEventPublisher not initialized - user events will not be published:", error);
+  }
+
   const googleAuthUseCase = new GoogleAuthUseCase(
     googleOAuthClient,
     jwtGenerator,
     userRepo,
-    authRepo
+    authRepo,
+    eventPublisher
   );
 
   const googleAuthController = new GoogleAuthController(googleAuthUseCase);
