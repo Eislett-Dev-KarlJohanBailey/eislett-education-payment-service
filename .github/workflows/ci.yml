@@ -27,10 +27,20 @@ jobs:
         run: npm install
 
       - name: Build affected packages
-        run: npx turbo run build
+        run: |
+          if [ "${{ vars.BUILD_AUTH_SERVICE }}" == "true" ]; then
+            npx turbo run build
+          else
+            npx turbo run build --filter='!@services/auth-service'
+          fi
 
       - name: Package affected services
-        run: npx turbo run package
+        run: |
+          if [ "${{ vars.BUILD_AUTH_SERVICE }}" == "true" ]; then
+            npx turbo run package
+          else
+            npx turbo run package --filter='!@services/auth-service'
+          fi
 
       # - name: Verify function.zip exists
       #   run: |
@@ -79,7 +89,11 @@ jobs:
       - name: Bootstrap Terraform backend
         run: |
           PROJECT_NAME="${{ steps.project.outputs.project_name }}"
-          for service in product-service pricing-service access-service entitlement-service stripe-service dunning-service trial-service transaction-service usage-event-service; do
+          SERVICES="product-service pricing-service access-service entitlement-service stripe-service dunning-service trial-service transaction-service usage-event-service"
+          if [ "${{ vars.BUILD_AUTH_SERVICE }}" == "true" ]; then
+            SERVICES="${SERVICES} auth-service"
+          fi
+          for service in $SERVICES; do
             export BUCKET="${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state"
             export TABLE="${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state-locking"
             export AWS_REGION="us-east-1"
@@ -90,7 +104,11 @@ jobs:
         run: |
           # Deploy services in dependency order
           # First: services with no dependencies
-          for service in product-service pricing-service access-service trial-service transaction-service usage-event-service; do
+          SERVICES="product-service pricing-service access-service trial-service transaction-service usage-event-service"
+          if [ "${{ vars.BUILD_AUTH_SERVICE }}" == "true" ]; then
+            SERVICES="${SERVICES} auth-service"
+          fi
+          for service in $SERVICES; do
             # Verify function.zip exists from Terraform's perspective
             if [ ! -f "services/$service/function.zip" ]; then
               echo "Error: function.zip not found at services/$service/function.zip"
@@ -118,6 +136,29 @@ jobs:
                 -var="state_region=${{ secrets.TF_STATE_REGION }}" \
                 -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
             fi
+          done
+          
+          # Deploy auth-service if enabled
+          if [ "${{ vars.BUILD_AUTH_SERVICE }}" == "true" ]; then
+            service="auth-service"
+            if [ ! -f "services/$service/function.zip" ]; then
+              echo "Error: function.zip not found at services/$service/function.zip"
+              exit 1
+            fi
+            PROJECT_NAME="${{ steps.project.outputs.project_name }}"
+            terraform -chdir=infra/services/$service init \
+              -backend-config="bucket=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state" \
+              -backend-config="key=tf-infra/${{ steps.env.outputs.environment }}.tfstate" \
+              -backend-config="region=us-east-1" \
+              -backend-config="dynamodb_table=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state-locking" \
+              -backend-config="encrypt=true"
+            terraform -chdir=infra/services/$service apply -auto-approve \
+              -var="project_name=${PROJECT_NAME}" \
+              -var="environment=${{ steps.env.outputs.environment }}" \
+              -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
+              -var="state_region=${{ secrets.TF_STATE_REGION }}" \
+              -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
+          fi
           done
           
           # Then: trial-service (depends on product-service and access-service outputs)

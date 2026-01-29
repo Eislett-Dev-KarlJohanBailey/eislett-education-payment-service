@@ -29,7 +29,7 @@ export class StartTrialUseCase {
   ) {}
 
   async execute(input: StartTrialInput): Promise<{ trialId: string; expiresAt: string }> {
-    const { userId, productId, trialDurationHours = 3, role = "LEARNER" as EntitlementRole } = input;
+    const { userId, productId, trialDurationHours = 3, role = "learner" as EntitlementRole } = input;
 
     // Check if user already has a trial for this product
     const existingTrial = await this.trialRepo.findByUserAndProduct(userId, productId);

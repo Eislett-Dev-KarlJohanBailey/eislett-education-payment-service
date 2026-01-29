@@ -79,7 +79,7 @@ export class ProcessBillingEventUseCase {
     // Role is not in event payload, default to LEARNER
     console.log(event)
     // In the future, this could fetch from a user service
-    return EntitlementRole.LEARNER;
+    return "learner";
   }
 
   private async handleSubscriptionCreated(
@@ -188,7 +188,7 @@ export class ProcessBillingEventUseCase {
   ): Promise<void> {
     const { userId, productId, currentPeriodEnd } = event.payload;
     const expiresAt = new Date(currentPeriodEnd);
-    const userRole = EntitlementRole.LEARNER; // Default role
+    const userRole: EntitlementRole = "learner"; // Default role
 
     // Re-activate entitlements (not a renewal, just resuming)
     await this.createEntitlementsFromProduct(userId, productId, userRole, expiresAt, false);
