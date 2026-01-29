@@ -79,7 +79,7 @@ jobs:
       - name: Bootstrap Terraform backend
         run: |
           PROJECT_NAME="${{ steps.project.outputs.project_name }}"
-          for service in product-service pricing-service access-service entitlement-service stripe-service dunning-service trial-service transaction-service; do
+          for service in product-service pricing-service access-service entitlement-service stripe-service dunning-service trial-service transaction-service usage-event-service; do
             export BUCKET="${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state"
             export TABLE="${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state-locking"
             export AWS_REGION="us-east-1"
@@ -90,7 +90,7 @@ jobs:
         run: |
           # Deploy services in dependency order
           # First: services with no dependencies
-          for service in product-service pricing-service access-service trial-service transaction-service; do
+          for service in product-service pricing-service access-service trial-service transaction-service usage-event-service; do
             # Verify function.zip exists from Terraform's perspective
             if [ ! -f "services/$service/function.zip" ]; then
               echo "Error: function.zip not found at services/$service/function.zip"

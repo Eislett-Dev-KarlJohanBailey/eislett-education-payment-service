@@ -77,3 +77,7 @@ export * from "./trials/index";
 // Transactions
 
 export * from "./transactions/index";
+
+// Usage events (entitlement consumption)
+
+export * from "./usage-events/index";
