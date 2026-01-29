@@ -6,6 +6,8 @@ import { CreatePaymentIntentUseCase } from "./app/usecases/create.payment.intent
 import { HandleWebhookUseCase } from "./app/usecases/handle.webhook.usecase";
 import { CreatePaymentIntentController } from "./app/controllers/create.payment.intent.controller";
 import { WebhookController } from "./app/controllers/webhook.controller";
+import { GetPaymentMethodsController } from "./app/controllers/get.payment.methods.controller";
+import { GetPaymentIntentStatusController } from "./app/controllers/get.payment.intent.status.controller";
 import {
   GetProductUseCase,
   GetPriceUseCase,
@@ -61,8 +63,19 @@ export function bootstrap() {
     stripeClient
   );
 
+  const getPaymentMethodsController = new GetPaymentMethodsController(
+    stripeClient,
+    customerRepo
+  );
+
+  const getPaymentIntentStatusController = new GetPaymentIntentStatusController(
+    stripeClient
+  );
+
   return {
     createPaymentIntentController,
     webhookController,
+    getPaymentMethodsController,
+    getPaymentIntentStatusController,
   };
 }

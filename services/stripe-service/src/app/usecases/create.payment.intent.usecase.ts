@@ -1,3 +1,4 @@
+import Stripe from "stripe";
 import { StripeClient } from "../../infrastructure/stripe.client";
 import { StripeCustomerRepository } from "../../infrastructure/stripe-customer.repository";
 import { GetProductUseCase, GetPriceUseCase, UpdateProductUseCase, UpdatePriceUseCase, BillingType, Interval, ListPricesByProductUseCase, ProductType } from "@libs/domain";
@@ -8,15 +9,33 @@ export interface CreatePaymentIntentInput {
   userEmail?: string;
   priceId: string;
   addonProductIds?: string[]; // Optional array of add-on product IDs to attach
+  paymentMethodId?: string; // Optional: user can specify which payment method to use
   successUrl: string;
   cancelUrl: string;
 }
 
 export interface CreatePaymentIntentOutput {
+  // Checkout flow (if no payment method available)
   checkoutUrl?: string;
+  
+  // Direct payment flow (if payment method used)
   paymentIntentId?: string;
-  customerId: string;
   subscriptionId?: string;
+  status?: "succeeded" | "requires_action" | "requires_payment_method" | "processing";
+  clientSecret?: string; // For 3D Secure or other authentication
+  requiresAction?: boolean;
+  
+  // Processing status details
+  isProcessing?: boolean; // Explicit flag for processing state
+  nextAction?: {
+    type: "poll_status" | "wait_for_webhook" | "complete_payment";
+    pollEndpoint?: string; // Endpoint to poll for status updates
+    estimatedCompletionTime?: number; // Estimated seconds until completion
+    message?: string; // Human-readable message for the action
+    requiresClientSecret?: boolean; // Whether clientSecret is required for this action
+  };
+  
+  customerId: string;
   isUpdate: boolean;
 }
 
@@ -223,8 +242,122 @@ export class CreatePaymentIntentUseCase {
       };
     }
 
-    // No existing subscription - create a new checkout session
-    // For one-time payments, use mode: "payment", for subscriptions use mode: "subscription"
+    // Get customer's payment methods
+    const stripeCustomer = await this.stripeClient.retrieveCustomer(stripeCustomerId);
+    const paymentMethods = await this.stripeClient.listCustomerPaymentMethods(stripeCustomerId);
+    const defaultPaymentMethodId = typeof stripeCustomer.invoice_settings?.default_payment_method === "string"
+      ? stripeCustomer.invoice_settings.default_payment_method
+      : stripeCustomer.invoice_settings?.default_payment_method?.toString();
+    
+    const defaultPaymentMethod = paymentMethods.find(pm => pm.id === defaultPaymentMethodId) 
+      || paymentMethods[0]; // Use first if no default set
+    
+    // Determine which payment method to use
+    let paymentMethodToUse: Stripe.PaymentMethod | null = null;
+    if (input.paymentMethodId) {
+      // User specified a payment method
+      paymentMethodToUse = paymentMethods.find(pm => pm.id === input.paymentMethodId) || null;
+      if (!paymentMethodToUse) {
+        throw new Error(`Payment method ${input.paymentMethodId} not found for customer`);
+      }
+    } else if (defaultPaymentMethod) {
+      // Use default payment method
+      paymentMethodToUse = defaultPaymentMethod;
+    }
+
+    // If one-time payment and we have a payment method, try direct PaymentIntent
+    if (isOneTime && paymentMethodToUse) {
+      const paymentIntent = await this.stripeClient.createPaymentIntent({
+        customerId: stripeCustomerId,
+        paymentMethodId: paymentMethodToUse.id,
+        amount: Math.round(price.amount * 100),
+        currency: price.currency,
+        metadata: {
+          userId: input.userId,
+          priceId: input.priceId,
+          productId: product.productId,
+        },
+        confirm: true,
+      });
+
+      const isProcessing = paymentIntent.status === "processing";
+      const requiresAction = paymentIntent.status === "requires_action";
+
+      return {
+        customerId: stripeCustomerId,
+        paymentIntentId: paymentIntent.id,
+        status: paymentIntent.status as any,
+        clientSecret: paymentIntent.client_secret || undefined,
+        requiresAction,
+        isProcessing,
+        nextAction: isProcessing ? {
+          type: "poll_status",
+          pollEndpoint: `/stripe/payment-intent/${paymentIntent.id}/status`,
+          estimatedCompletionTime: 30, // Seconds - adjust based on payment method type
+        } : requiresAction ? {
+          type: "complete_payment",
+          message: "Use Stripe.js with the clientSecret to complete 3D Secure authentication",
+          requiresClientSecret: true,
+        } : undefined,
+        isUpdate: false,
+      };
+    }
+
+    // If subscription and we have a payment method, try direct Subscription
+    if (!isOneTime && paymentMethodToUse && existingSubscriptions.length === 0) {
+      const subscription = await this.stripeClient.createSubscriptionWithPaymentMethod({
+        customerId: stripeCustomerId,
+        paymentMethodId: paymentMethodToUse.id,
+        priceId: stripePriceId!,
+        addonPriceIds: addonLineItems.map(item => item.priceId),
+        metadata: {
+          userId: input.userId,
+          priceId: input.priceId,
+          productId: product.productId,
+          billingType: "recurring",
+          ...(addonProductIds.length > 0 ? { addonProductIds: addonProductIds.join(",") } : {}),
+        },
+      });
+
+      // Check if subscription requires action (via latest invoice payment intent)
+      const latestInvoice = subscription.latest_invoice as Stripe.Invoice;
+      const paymentIntent = latestInvoice?.payment_intent as Stripe.PaymentIntent | null;
+
+      if (paymentIntent) {
+        const isProcessing = paymentIntent.status === "processing";
+        const requiresAction = paymentIntent.status === "requires_action";
+
+        return {
+          customerId: stripeCustomerId,
+          subscriptionId: subscription.id,
+          paymentIntentId: paymentIntent.id,
+          status: paymentIntent.status as any,
+          clientSecret: paymentIntent.client_secret || undefined,
+          requiresAction,
+          isProcessing,
+          nextAction: isProcessing ? {
+            type: "poll_status",
+            pollEndpoint: `/stripe/payment-intent/${paymentIntent.id}/status`,
+            estimatedCompletionTime: 30,
+          } : requiresAction ? {
+            type: "complete_payment",
+            message: "Use Stripe.js with the clientSecret to complete 3D Secure authentication",
+            requiresClientSecret: true,
+          } : undefined,
+          isUpdate: false,
+        };
+      }
+
+      // Subscription created successfully
+      return {
+        customerId: stripeCustomerId,
+        subscriptionId: subscription.id,
+        status: "succeeded",
+        isUpdate: false,
+      };
+    }
+
+    // Fall back to checkout session (no payment method or user preference)
     const session = await this.stripeClient.createCheckoutSession({
       customerId: stripeCustomerId,
       priceId: stripePriceId!,

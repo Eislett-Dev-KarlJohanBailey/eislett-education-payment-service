@@ -236,6 +236,72 @@ export class StripeClient {
     });
   }
 
+  /**
+   * Lists all payment methods for a customer
+   */
+  async listCustomerPaymentMethods(customerId: string): Promise<Stripe.PaymentMethod[]> {
+    const paymentMethods = await this.client.paymentMethods.list({
+      customer: customerId,
+      type: "card",
+    });
+    return paymentMethods.data;
+  }
+
+  /**
+   * Creates a PaymentIntent directly with a payment method (for one-time payments)
+   */
+  async createPaymentIntent(params: {
+    customerId: string;
+    paymentMethodId: string;
+    amount: number;
+    currency: string;
+    metadata?: Record<string, string>;
+    confirm?: boolean; // If true, attempts to confirm immediately
+  }): Promise<Stripe.PaymentIntent> {
+    return await this.client.paymentIntents.create({
+      customer: params.customerId,
+      payment_method: params.paymentMethodId,
+      amount: params.amount,
+      currency: params.currency.toLowerCase(),
+      confirmation_method: "automatic",
+      confirm: params.confirm ?? true, // Default to true to attempt charge immediately
+      metadata: params.metadata || {},
+    });
+  }
+
+  /**
+   * Creates a Subscription directly with a payment method (for recurring payments)
+   */
+  async createSubscriptionWithPaymentMethod(params: {
+    customerId: string;
+    paymentMethodId: string;
+    priceId: string;
+    addonPriceIds?: string[];
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Subscription> {
+    const items: Stripe.SubscriptionCreateParams.Item[] = [
+      { price: params.priceId },
+    ];
+
+    if (params.addonPriceIds && params.addonPriceIds.length > 0) {
+      for (const addonPriceId of params.addonPriceIds) {
+        items.push({ price: addonPriceId });
+      }
+    }
+
+    return await this.client.subscriptions.create({
+      customer: params.customerId,
+      items: items,
+      default_payment_method: params.paymentMethodId,
+      payment_behavior: "default_incomplete", // Will attempt charge, but may require action
+      payment_settings: {
+        payment_method_types: ["card"],
+      },
+      metadata: params.metadata || {},
+      expand: ["latest_invoice.payment_intent"],
+    });
+  }
+
   constructEvent(
     payload: string | Buffer,
     signature: string,

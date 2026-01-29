@@ -7,7 +7,7 @@ export class CreatePaymentIntentController {
   ) {}
 
   handle = async (req: RequestContext & { user: { id: string; role?: string } }) => {
-    const { priceId, addonProductIds, successUrl, cancelUrl } = req.body;
+    const { priceId, addonProductIds, paymentMethodId, successUrl, cancelUrl } = req.body;
     const userId = req.user.id;
     const userRole = req.user.role;
 
@@ -26,6 +26,7 @@ export class CreatePaymentIntentController {
       userRole,
       priceId,
       addonProductIds: Array.isArray(addonProductIds) ? addonProductIds : undefined,
+      paymentMethodId: typeof paymentMethodId === "string" ? paymentMethodId : undefined,
       successUrl,
       cancelUrl,
     });
