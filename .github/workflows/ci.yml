@@ -159,7 +159,6 @@ jobs:
               -var="state_region=${{ secrets.TF_STATE_REGION }}" \
               -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
           fi
-          done
           
           # Then: trial-service (depends on product-service and access-service outputs)
           service="trial-service"
