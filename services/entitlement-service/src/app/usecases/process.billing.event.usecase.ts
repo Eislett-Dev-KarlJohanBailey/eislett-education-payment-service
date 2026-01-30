@@ -580,15 +580,35 @@ export class ProcessBillingEventUseCase {
       
       if (entitlement) {
         if (immediate) {
-          entitlement.status = EntitlementStatus.REVOKED;
-          entitlement.expiresAt = undefined;
+          // Check if user has permanentLimit from one-off payments
+          const hasPermanentLimit = entitlement.usage?.permanentLimit && entitlement.usage.permanentLimit > 0;
           
-          // Remove regular limit (from subscriptions) but preserve permanent limit (from one-time payments)
-          if (entitlement.usage) {
-            entitlement.usage.limit = 0; // Remove subscription limit
-            // permanentLimit is preserved - never removed
-            entitlement.usage.resetStrategy = undefined; // Remove reset strategy
-            entitlement.usage.resetAt = undefined; // Remove reset date
+          if (hasPermanentLimit) {
+            // User has one-off credits: keep entitlement ACTIVE so they can use permanentLimit
+            // Only remove subscription limit, preserve permanentLimit
+            entitlement.status = EntitlementStatus.ACTIVE;
+            entitlement.expiresAt = undefined; // No expiration for permanent access
+            
+            if (entitlement.usage) {
+              entitlement.usage.limit = 0; // Remove subscription limit
+              // permanentLimit is preserved - never removed
+              entitlement.usage.resetStrategy = undefined; // Remove reset strategy
+              entitlement.usage.resetAt = undefined; // Remove reset date
+            }
+            
+            console.log(`Subscription expired for user ${userId}, entitlement ${entitlementKey}: Keeping ACTIVE due to permanentLimit ${entitlement.usage?.permanentLimit}`);
+          } else {
+            // No permanentLimit: revoke entitlement completely
+            entitlement.status = EntitlementStatus.REVOKED;
+            entitlement.expiresAt = undefined;
+            
+            // Remove regular limit (from subscriptions) but preserve permanent limit (from one-time payments)
+            if (entitlement.usage) {
+              entitlement.usage.limit = 0; // Remove subscription limit
+              // permanentLimit is preserved - never removed
+              entitlement.usage.resetStrategy = undefined; // Remove reset strategy
+              entitlement.usage.resetAt = undefined; // Remove reset date
+            }
           }
         } else if (expiresAt) {
           // Set expiration date but keep active until then
