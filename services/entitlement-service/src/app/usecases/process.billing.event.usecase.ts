@@ -11,6 +11,7 @@ import {
   DunningState,
 } from "@libs/domain";
 import { EntitlementEventPublisher } from "../../infrastructure/event.publisher";
+import { ProcessedPaymentsRepository } from "../../infrastructure/processed-payments.repository";
 
 type BillingDomainEvent<T = any> = BillingEvent.BillingDomainEvent<T>;
 type SubscriptionCreatedEvent = BillingEvent.SubscriptionCreatedEvent;
@@ -30,7 +31,8 @@ export class ProcessBillingEventUseCase {
     private readonly eventPublisher: EntitlementEventPublisher,
     private readonly entitlementRepo: EntitlementRepository,
     private readonly productRepo: ProductRepositoryPorts.ProductRepository,
-    private readonly dunningRepo?: DunningRepository // Optional - only check if available
+    private readonly dunningRepo?: DunningRepository, // Optional - only check if available
+    private readonly processedPaymentsRepo?: ProcessedPaymentsRepository // Optional - idempotency for one-off payments
   ) {}
 
   async execute(event: BillingDomainEvent<any>): Promise<void> {
@@ -200,7 +202,7 @@ export class ProcessBillingEventUseCase {
     event: PaymentSuccessfulEvent,
     role: EntitlementRole
   ): Promise<void> {
-    const { userId, productId, billingType } = event.payload;
+    const { userId, productId, billingType, paymentIntentId } = event.payload;
 
     if (!productId) {
       console.log(`Payment successful but no productId, skipping entitlement creation`);
@@ -209,6 +211,15 @@ export class ProcessBillingEventUseCase {
 
     // Check if this is a one-time payment
     const isOneTime = billingType === "one_time" || !event.payload.subscriptionId;
+
+    // Idempotency: one-off payments must only add usage once per paymentIntentId
+    if (isOneTime && paymentIntentId && this.processedPaymentsRepo) {
+      const alreadyProcessed = await this.processedPaymentsRepo.isPaymentProcessed(paymentIntentId);
+      if (alreadyProcessed) {
+        console.log(`One-off payment ${paymentIntentId} already applied, skipping duplicate`);
+        return;
+      }
+    }
 
     if (isOneTime) {
       // For one-time payments:
@@ -219,6 +230,11 @@ export class ProcessBillingEventUseCase {
     } else {
       // For subscription payments, create entitlements with expiration
       await this.createEntitlementsFromProduct(userId, productId, role, undefined, false, false);
+    }
+
+    // Mark one-off payment as processed so duplicates (e.g. checkout + payment_intent.succeeded) don't add again
+    if (isOneTime && paymentIntentId && this.processedPaymentsRepo) {
+      await this.processedPaymentsRepo.markPaymentProcessed(paymentIntentId);
     }
 
     await this.publishEntitlementEvents(userId, productId, "payment.successful", event.meta);

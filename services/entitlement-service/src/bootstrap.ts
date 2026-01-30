@@ -8,6 +8,7 @@ import {
 } from "@libs/domain";
 import { ProcessBillingEventUseCase } from "./app/usecases/process.billing.event.usecase";
 import { EntitlementEventPublisher } from "./infrastructure/event.publisher";
+import { DynamoProcessedPaymentsRepository } from "./infrastructure/processed-payments.repository";
 
 export function bootstrap() {
   const productsTableName = process.env.PRODUCTS_TABLE;
@@ -30,7 +31,8 @@ export function bootstrap() {
   const createEntitlementUseCase = new CreateEntitlementUseCase(entitlementRepo);
   const syncProductLimitsUseCase = new SyncProductLimitsToEntitlementsUseCase(productRepo, entitlementRepo);
   const eventPublisher = new EntitlementEventPublisher();
-  
+  const processedPaymentsRepo = new DynamoProcessedPaymentsRepository(processedEventsTableName);
+
   // Dunning repository is optional - only used to check state before revoking
   const dunningRepo = dunningTableName ? new DynamoDunningRepository(dunningTableName) : undefined;
 
@@ -40,7 +42,8 @@ export function bootstrap() {
     eventPublisher,
     entitlementRepo,
     productRepo as ProductRepositoryPorts.ProductRepository,
-    dunningRepo
+    dunningRepo,
+    processedPaymentsRepo
   );
 
   return {

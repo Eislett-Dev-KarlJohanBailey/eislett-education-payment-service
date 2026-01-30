@@ -18,9 +18,7 @@ export const handler = async (
       const sqsRecord = event.Records[i];
 
       try {
-        // Check idempotency (TODO: implement processed events check)
-        // For now, we'll process all events
-        // In the future, check PROCESSED_EVENTS_TABLE before processing
+        // One-off payment idempotency is handled in ProcessBillingEventUseCase by paymentIntentId (PROCESSED_EVENTS_TABLE).
 
         // Process the billing event
         await processBillingEventUseCase.execute(billingEvent);
