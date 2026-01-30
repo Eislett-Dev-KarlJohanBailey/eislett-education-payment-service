@@ -14,6 +14,13 @@ export function response(
 }
 
 export function errorResponse(error: any): APIGatewayProxyResult {
+  if (error.name === "AuthenticationError") {
+    return response(401, {
+      error: "UNAUTHORIZED",
+      message: error.message || "Authorization required"
+    });
+  }
+
   if (error.name === "NotFoundError") {
     return response(404, {
       error: "NOT_FOUND",
