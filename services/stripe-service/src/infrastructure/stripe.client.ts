@@ -257,8 +257,9 @@ export class StripeClient {
     currency: string;
     metadata?: Record<string, string>;
     confirm?: boolean; // If true, attempts to confirm immediately
+    returnUrl?: string; // Required when Dashboard allows redirect-based payment methods (e.g. 3DS, iDEAL)
   }): Promise<Stripe.PaymentIntent> {
-    return await this.client.paymentIntents.create({
+    const createParams: Stripe.PaymentIntentCreateParams = {
       customer: params.customerId,
       payment_method: params.paymentMethodId,
       amount: params.amount,
@@ -266,7 +267,11 @@ export class StripeClient {
       confirmation_method: "automatic",
       confirm: params.confirm ?? true, // Default to true to attempt charge immediately
       metadata: params.metadata || {},
-    });
+    };
+    if (params.returnUrl) {
+      createParams.return_url = params.returnUrl;
+    }
+    return await this.client.paymentIntents.create(createParams);
   }
 
   /**

@@ -278,6 +278,7 @@ export class CreatePaymentIntentUseCase {
           productId: product.productId,
         },
         confirm: true,
+        returnUrl: input.successUrl, // Required when Stripe allows redirect-based payment methods (e.g. 3DS)
       });
 
       const isProcessing = paymentIntent.status === "processing";
