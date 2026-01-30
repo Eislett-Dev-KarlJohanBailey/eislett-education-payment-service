@@ -94,7 +94,8 @@ import { EntitlementUsage } from "../domain/entities/entitlement-usage.entity";
               used: entitlement.usage.used,
               resetAt: entitlement.usage.resetAt?.toISOString(),
               resetStrategy: entitlement.usage.resetStrategy,
-              permanentLimit: entitlement.usage.permanentLimit,
+              // Always persist permanentLimit (default 0) so one-off top-ups merge with subscription limits
+              permanentLimit: entitlement.usage.permanentLimit ?? 0,
             }
           : undefined,
       };
