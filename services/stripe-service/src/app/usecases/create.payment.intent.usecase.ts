@@ -276,6 +276,7 @@ export class CreatePaymentIntentUseCase {
           userId: input.userId,
           priceId: input.priceId,
           productId: product.productId,
+          billingType: "one_time",
         },
         confirm: true,
         returnUrl: input.successUrl, // Required when Stripe allows redirect-based payment methods (e.g. 3DS)
