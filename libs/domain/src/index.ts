@@ -64,6 +64,7 @@ export * as ProductRepositoryPorts from "./products/app/ports/product.repository
 
 // BillingEvents
 
+
 export * as BillingEvent from "./billing-events/index";
 
 // Dunning
