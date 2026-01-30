@@ -10,6 +10,7 @@ export interface GoogleAuthInput {
   code: string;
   role?: string; // Optional role, defaults to "learner"
   preferredLanguage?: string; // Optional preferred language override
+  redirectUri?: string; // Optional redirect URI (must match what was used in authorization request)
 }
 
 export interface GoogleAuthOutput {
@@ -40,10 +41,11 @@ export class GoogleAuthUseCase {
       await ensureInit();
     }
 
-    const { code, role = "learner", preferredLanguage } = input;
+    const { code, role = "learner", preferredLanguage, redirectUri } = input;
 
     // Exchange code for access token
-    const tokens = await this.googleOAuthClient.getToken(code);
+    // Pass redirectUri to ensure it matches what was used in the authorization request
+    const tokens = await this.googleOAuthClient.getToken(code, redirectUri);
 
     // Get user info from Google
     const googleUserInfo = await this.googleOAuthClient.getUserInfoFromAccessToken(

@@ -59,12 +59,19 @@ export class GoogleOAuthClient {
     });
   }
 
-  async getToken(code: string): Promise<{
+  async getToken(code: string, redirectUri?: string): Promise<{
     access_token: string;
     refresh_token?: string;
     expires_in?: number;
   }> {
-    const { tokens } = await this.client.getToken(code);
+    // Use provided redirectUri if given, otherwise use the configured one
+    // This ensures the redirect URI matches what was used in the authorization request
+    const tokenRequest: any = { code };
+    if (redirectUri) {
+      tokenRequest.redirect_uri = redirectUri;
+    }
+    
+    const { tokens } = await this.client.getToken(tokenRequest);
     
     if (!tokens.access_token) {
       throw new Error("Failed to get access token from Google");

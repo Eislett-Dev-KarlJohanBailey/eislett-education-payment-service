@@ -7,7 +7,7 @@ export class GoogleAuthController {
   ) {}
 
   handle = async (req: RequestContext) => {
-    const { code, role, preferredLanguage } = req.body;
+    const { code, role, preferredLanguage, redirectUri } = req.body;
 
     if (!code) {
       throw new Error("code is required");
@@ -17,6 +17,7 @@ export class GoogleAuthController {
       code,
       role: typeof role === "string" ? role : undefined,
       preferredLanguage: typeof preferredLanguage === "string" ? preferredLanguage : undefined,
+      redirectUri: typeof redirectUri === "string" ? redirectUri : undefined,
     });
   };
 }
