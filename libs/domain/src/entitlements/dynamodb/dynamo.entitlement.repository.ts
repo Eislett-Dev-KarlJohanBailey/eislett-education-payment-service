@@ -94,6 +94,7 @@ import { EntitlementUsage } from "../domain/entities/entitlement-usage.entity";
               used: entitlement.usage.used,
               resetAt: entitlement.usage.resetAt?.toISOString(),
               resetStrategy: entitlement.usage.resetStrategy,
+              permanentLimit: entitlement.usage.permanentLimit,
             }
           : undefined,
       };
@@ -114,7 +115,8 @@ import { EntitlementUsage } from "../domain/entities/entitlement-usage.entity";
               item.usage.resetAt
                 ? new Date(item.usage.resetAt)
                 : undefined,
-              item.usage.resetStrategy
+              item.usage.resetStrategy,
+              item.usage.permanentLimit
             )
           : undefined
       );
