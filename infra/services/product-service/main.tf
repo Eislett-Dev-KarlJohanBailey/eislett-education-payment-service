@@ -99,6 +99,21 @@ module "product_service_iam_role" {
   }
 }
 
+# Allow Lambda to decrypt environment variables (KMS)
+resource "aws_iam_role_policy" "product_service_kms" {
+  name = "allow-lambda-kms-decrypt"
+  role = module.product_service_iam_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "kms:Decrypt"
+      Resource = "*"
+    }]
+  })
+}
+
 module "product_service_lambda" {
   source = "../../modules/lambda"
 
