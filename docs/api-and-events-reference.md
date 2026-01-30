@@ -8,6 +8,25 @@ Complete reference for all API endpoints, SNS topics, and SQS queues in the paym
 - [SNS Topics (Events)](#sns-topics-events)
 - [SQS Queues](#sqs-queues)
 - [Authentication](#authentication)
+- [Deployment Order](#deployment-order)
+
+---
+
+## Deployment Order
+
+When deploying services manually or in a new environment, **entitlement-service must be deployed before transaction-service and dunning-service**. Entitlement-service creates the `billing-events` SNS topic; transaction-service and dunning-service look up that topic by name. If the topic does not exist, you will see:
+
+```text
+Error: reading SNS Topic ({project}-{env}-billing-events): empty result
+```
+
+**Recommended order:**
+
+1. product-service, pricing-service, access-service, trial-service, usage-event-service, (auth-service)
+2. **entitlement-service** (creates `billing-events` and `entitlement-updates` SNS topics)
+3. transaction-service
+4. stripe-service
+5. dunning-service
 
 ---
 
