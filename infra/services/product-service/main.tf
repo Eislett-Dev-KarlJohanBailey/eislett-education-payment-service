@@ -42,6 +42,23 @@ data "terraform_remote_state" "foundation" {
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+# Get JWT secret from AWS Secrets Manager
+data "aws_secretsmanager_secret" "jwt_access_token_secret" {
+  name = "${var.project_name}-${var.environment}-jwt-access-token-secret"
+}
+
+data "aws_secretsmanager_secret_version" "jwt_access_token_secret" {
+  secret_id = data.aws_secretsmanager_secret.jwt_access_token_secret.id
+}
+
+# Parse secrets - handle both JSON and plain string formats
+locals {
+  jwt_access_token_secret = try(
+    jsondecode(data.aws_secretsmanager_secret_version.jwt_access_token_secret.secret_string)["key"],
+    data.aws_secretsmanager_secret_version.jwt_access_token_secret.secret_string
+  )
+}
+
 # DynamoDB Table for Products
 resource "aws_dynamodb_table" "products" {
   name         = "${var.project_name}-${var.environment}-products"
@@ -99,18 +116,24 @@ module "product_service_iam_role" {
   }
 }
 
-# Allow Lambda to decrypt environment variables (KMS)
-resource "aws_iam_role_policy" "product_service_kms" {
-  name = "allow-lambda-kms-decrypt"
+# Additional IAM Policy for Secrets Manager
+resource "aws_iam_role_policy" "secrets_manager" {
+  name = "product-service-secrets-manager-${var.environment}"
   role = module.product_service_iam_role.role_name
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = "kms:Decrypt"
-      Resource = "*"
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [
+          data.aws_secretsmanager_secret.jwt_access_token_secret.arn
+        ]
+      }
+    ]
   })
 }
 
@@ -124,7 +147,8 @@ module "product_service_lambda" {
   iam_role_arn  = module.product_service_iam_role.role_arn
 
   environment_variables = {
-    PRODUCTS_TABLE = aws_dynamodb_table.products.name
+    PRODUCTS_TABLE           = aws_dynamodb_table.products.name
+    JWT_ACCESS_TOKEN_SECRET  = local.jwt_access_token_secret
   }
 }
 
