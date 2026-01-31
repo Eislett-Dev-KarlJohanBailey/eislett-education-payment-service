@@ -64,15 +64,21 @@ export class GoogleOAuthClient {
     refresh_token?: string;
     expires_in?: number;
   }> {
-    // Use provided redirectUri if given, otherwise use the configured one
-    // This ensures the redirect URI matches what was used in the authorization request
-    const tokenRequest: any = { code };
-    if (redirectUri) {
-      tokenRequest.redirect_uri = redirectUri;
+    if (!this.config) {
+      throw new Error("GoogleOAuthClient not initialized");
     }
-    
-    const { tokens } = await this.client.getToken(tokenRequest);
-    
+
+    // When client sends redirectUri, ignore secret and use client's (so it matches authorization request)
+    const clientToUse = redirectUri
+      ? new OAuth2Client({
+          clientId: this.config.clientId,
+          clientSecret: this.config.clientSecret,
+          redirectUri,
+        })
+      : this.client;
+
+    const { tokens } = await clientToUse.getToken(code);
+
     if (!tokens.access_token) {
       throw new Error("Failed to get access token from Google");
     }
