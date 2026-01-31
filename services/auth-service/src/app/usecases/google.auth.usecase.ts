@@ -41,7 +41,7 @@ export class GoogleAuthUseCase {
       await ensureInit();
     }
 
-    const { code, role = "learner", preferredLanguage, redirectUri } = input;
+    const { code, role = "user", preferredLanguage, redirectUri } = input;
 
     // Exchange code for access token
     // Pass redirectUri to ensure it matches what was used in the authorization request

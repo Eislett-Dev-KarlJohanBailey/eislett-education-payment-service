@@ -13,6 +13,15 @@ export function response(statusCode: number, body: any): APIGatewayProxyResult {
   };
 }
 
+function getErrorMessage(error: any): string {
+  const msg = error?.message;
+  const data = error?.response?.data;
+  if (data?.error_description) return data.error_description;
+  if (data?.error && typeof data.error === "string") return data.error;
+  if (typeof msg === "string" && msg) return msg;
+  return "An unexpected error occurred";
+}
+
 export function errorResponse(error: any): APIGatewayProxyResult {
   console.error("Error:", error);
 
@@ -37,8 +46,24 @@ export function errorResponse(error: any): APIGatewayProxyResult {
     });
   }
 
+  const message = getErrorMessage(error);
+
+  // Google OAuth / token errors: return 400 so client sees the real reason
+  const isAuthClientError =
+    message.includes("redirect_uri") ||
+    message.includes("invalid_grant") ||
+    message.includes("invalid_request") ||
+    message.includes("access_denied") ||
+    (error?.response?.status && error.response.status >= 400 && error.response.status < 500);
+  if (isAuthClientError) {
+    return response(400, {
+      error: "AUTH_ERROR",
+      message,
+    });
+  }
+
   return response(500, {
     error: "INTERNAL_ERROR",
-    message: error.message || "An unexpected error occurred",
+    message,
   });
 }
