@@ -95,8 +95,9 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
 
     return response(200, result);
 
-  } catch (err) {
-    console.error("Error in apiHandler:", err);
+  } catch (err: any) {
+    console.error("Error in apiHandler:", err?.message ?? err);
+    if (err?.stack) console.error("Stack:", err.stack);
     return errorResponse(err);
   }
 }

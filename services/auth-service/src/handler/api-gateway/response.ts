@@ -23,7 +23,15 @@ function getErrorMessage(error: any): string {
 }
 
 export function errorResponse(error: any): APIGatewayProxyResult {
-  console.error("Error:", error);
+  // Log internal errors in detail for CloudWatch (stack, response body, etc.)
+  console.error("Error:", error?.message ?? error);
+  if (error?.stack) {
+    console.error("Stack:", error.stack);
+  }
+  if (error?.response) {
+    console.error("Response status:", error.response?.status);
+    console.error("Response data:", JSON.stringify(error.response?.data ?? error.response));
+  }
 
   if (error.name === "ValidationError") {
     return response(400, {
