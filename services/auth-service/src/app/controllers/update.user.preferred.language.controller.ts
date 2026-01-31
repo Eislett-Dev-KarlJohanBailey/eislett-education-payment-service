@@ -7,7 +7,8 @@ export class UpdatePreferredLanguageController {
   ) {}
 
   handle = async (req: RequestContext & { user: { id: string } }) => {
-    const { preferredLanguage } = req.body;
+    const body = req.body ?? {};
+    const { preferredLanguage } = body;
     const userId = req.user.id;
 
     if (!preferredLanguage || typeof preferredLanguage !== "string") {

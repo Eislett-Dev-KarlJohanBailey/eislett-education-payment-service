@@ -7,7 +7,8 @@ export class GoogleAuthController {
   ) {}
 
   handle = async (req: RequestContext) => {
-    const { code, role, preferredLanguage, redirectUri } = req.body;
+    const body = req.body ?? {};
+    const { code, role, preferredLanguage, redirectUri } = body;
 
     if (!code) {
       throw new Error("code is required");

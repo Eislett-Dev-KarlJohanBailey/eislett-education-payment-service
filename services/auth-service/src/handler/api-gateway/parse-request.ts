@@ -3,11 +3,15 @@ import { RequestContext } from "./types";
 
 export function parseRequest(event: APIGatewayProxyEvent): RequestContext {
   const path = event.resource || event.path;
-  
+
   let body: any = null;
   if (event.body) {
     try {
-      body = JSON.parse(event.body);
+      const rawBody =
+        (event as any).isBase64Encoded === true
+          ? Buffer.from(event.body, "base64").toString("utf8")
+          : event.body;
+      body = typeof rawBody === "string" ? JSON.parse(rawBody) : rawBody;
     } catch (error) {
       body = event.body;
     }
