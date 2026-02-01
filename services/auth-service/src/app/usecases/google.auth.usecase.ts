@@ -35,117 +35,132 @@ export class GoogleAuthUseCase {
   ) {}
 
   async execute(input: GoogleAuthInput): Promise<GoogleAuthOutput> {
-    // Ensure clients are initialized
-    const ensureInit = (global as any).__authServiceEnsureInit;
-    if (ensureInit) {
-      await ensureInit();
-    }
+    try {
+      // Ensure clients are initialized
+      const ensureInit = (global as any).__authServiceEnsureInit;
+      if (ensureInit) {
+        await ensureInit();
+      }
 
-    const { code, role = "user", preferredLanguage, redirectUri } = input;
+      const { code, role = "user", preferredLanguage, redirectUri } = input;
 
-    // Exchange code for access token
-    // Pass redirectUri to ensure it matches what was used in the authorization request
-    const tokens = await this.googleOAuthClient.getToken(code, redirectUri);
+      // Exchange code for access token
+      const tokens = await this.googleOAuthClient.getToken(code, redirectUri);
 
-    // Get user info from Google
-    const googleUserInfo = await this.googleOAuthClient.getUserInfoFromAccessToken(
-      tokens.access_token
-    );
-
-    // Determine preferred language: use provided value, or Google's locale, or keep existing
-    const finalPreferredLanguage = preferredLanguage || googleUserInfo.locale;
-
-    // Check if user exists by Google ID
-    let user = await this.findUserByGoogleId(googleUserInfo.id);
-
-    if (!user) {
-      // Create new user
-      user = UserEntity.fromGoogleProfile(
-        googleUserInfo.id,
-        googleUserInfo.email,
-        googleUserInfo.name,
-        googleUserInfo.picture,
-        role,
-        finalPreferredLanguage
+      // Get user info from Google
+      const googleUserInfo = await this.googleOAuthClient.getUserInfoFromAccessToken(
+        tokens.access_token
       );
-      await this.userRepo.save(user);
 
-      // Publish user created event
-      if (this.eventPublisher) {
-        await this.eventPublisher.publishUserCreated({
+      // Determine preferred language: use provided value, or Google's locale, or keep existing
+      const finalPreferredLanguage = preferredLanguage || googleUserInfo.locale;
+
+      // Check if user exists by Google ID
+      let user = await this.findUserByGoogleId(googleUserInfo.id);
+
+      if (!user) {
+        // Create new user
+        user = UserEntity.fromGoogleProfile(
+          googleUserInfo.id,
+          googleUserInfo.email,
+          googleUserInfo.name,
+          googleUserInfo.picture,
+          role,
+          finalPreferredLanguage
+        );
+        await this.userRepo.save(user);
+
+        // Publish user created event
+        if (this.eventPublisher) {
+          await this.eventPublisher.publishUserCreated({
+            userId: user.userId,
+            email: user.email,
+            name: user.name,
+            picture: user.picture,
+            role: user.role,
+            preferredLanguage: user.preferredLanguage,
+            provider: "google",
+            providerId: googleUserInfo.id,
+            createdAt: user.createdAt.toISOString(),
+          });
+        }
+      } else {
+        // Update existing user if needed
+        const needsUpdate =
+          user.email !== googleUserInfo.email ||
+          user.name !== googleUserInfo.name ||
+          user.picture !== googleUserInfo.picture ||
+          (role && user.role !== role) ||
+          (finalPreferredLanguage && user.preferredLanguage !== finalPreferredLanguage);
+
+        if (needsUpdate) {
+          const updatedUser = new UserEntity(
+            user.userId,
+            googleUserInfo.email,
+            role,
+            googleUserInfo.name,
+            googleUserInfo.picture,
+            finalPreferredLanguage || user.preferredLanguage,
+            googleUserInfo.id,
+            user.createdAt,
+            new Date()
+          );
+          await this.userRepo.update(updatedUser);
+          user = updatedUser;
+        }
+      }
+
+      // Save or update authentication record
+      const existingAuth = await this.authRepo.findByUserIdAndProvider(
+        user.userId,
+        "google"
+      );
+
+      const expiresAt = tokens.expires_in
+        ? new Date(Date.now() + tokens.expires_in * 1000)
+        : undefined;
+
+      const auth = new AuthenticationEntity(
+        existingAuth?.authenticationId || `auth-${user.userId}-${Date.now()}`,
+        user.userId,
+        "google",
+        googleUserInfo.id,
+        tokens.access_token,
+        tokens.refresh_token,
+        expiresAt
+      );
+
+      await this.authRepo.save(auth);
+
+      // Generate JWT token
+      const token = this.jwtGenerator.generateToken(user.userId, user.role);
+
+      return {
+        token,
+        user: {
           userId: user.userId,
           email: user.email,
           name: user.name,
           picture: user.picture,
           role: user.role,
           preferredLanguage: user.preferredLanguage,
-          provider: "google",
-          providerId: googleUserInfo.id,
-          createdAt: user.createdAt.toISOString(),
-        });
-      }
-    } else {
-      // Update existing user if needed
-      const needsUpdate = 
-        user.email !== googleUserInfo.email || 
-        user.name !== googleUserInfo.name || 
-        user.picture !== googleUserInfo.picture ||
-        (role && user.role !== role) ||
-        (finalPreferredLanguage && user.preferredLanguage !== finalPreferredLanguage);
-
-      if (needsUpdate) {
-        const updatedUser = new UserEntity(
-          user.userId,
-          googleUserInfo.email,
-          role, // Update role if provided
-          googleUserInfo.name,
-          googleUserInfo.picture,
-          finalPreferredLanguage || user.preferredLanguage, // Use new language or keep existing
-          googleUserInfo.id, // Update googleId
-          user.createdAt,
-          new Date()
-        );
-        await this.userRepo.update(updatedUser);
-        user = updatedUser;
-      }
+        },
+      };
+    } catch (err: any) {
+      const msg = err?.message ?? String(err);
+      const step =
+        msg.includes("Secrets Manager") || msg.includes("load Google OAuth config")
+          ? "init"
+          : msg.includes("get access token") || err?.response?.data
+            ? "getToken"
+            : msg.includes("get user info")
+              ? "getUserInfo"
+              : msg.includes("save") || msg.includes("update") || msg.includes("findBy")
+                ? "persist"
+                : "unknown";
+      console.error(`Google auth failed at step=${step}`, { message: msg, responseData: err?.response?.data });
+      throw err;
     }
-
-    // Save or update authentication record
-    const existingAuth = await this.authRepo.findByUserIdAndProvider(
-      user.userId,
-      "google"
-    );
-
-    const expiresAt = tokens.expires_in
-      ? new Date(Date.now() + tokens.expires_in * 1000)
-      : undefined;
-
-    const auth = new AuthenticationEntity(
-      existingAuth?.authenticationId || `auth-${user.userId}-${Date.now()}`,
-      user.userId,
-      "google",
-      googleUserInfo.id,
-      tokens.access_token,
-      tokens.refresh_token,
-      expiresAt
-    );
-
-    await this.authRepo.save(auth);
-
-    // Generate JWT token
-    const token = this.jwtGenerator.generateToken(user.userId, user.role);
-
-    return {
-      token,
-      user: {
-        userId: user.userId,
-        email: user.email,
-        name: user.name,
-        picture: user.picture,
-        role: user.role,
-        preferredLanguage: user.preferredLanguage,
-      },
-    };
   }
 
   private async findUserByGoogleId(googleId: string): Promise<UserEntity | null> {

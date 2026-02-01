@@ -43,12 +43,15 @@ src/
 
 **Endpoint**: `POST /auth/google`
 
+**Flow**: The client sends the `code` and `redirectUri` from the Google OAuth callback. The service exchanges the code for tokens, fetches user details from Google, creates or updates the user, and responds with a JWT and user details.
+
 **Request Body**:
 ```json
 {
-  "code": "4/0A...",           // OAuth authorization code from Google
-  "role": "learner",            // Optional: user role (defaults to "learner")
-  "preferredLanguage": "en"     // Optional: preferred language (defaults to Google's locale)
+  "code": "4/0A...",              // Required: OAuth authorization code from Google (query param after redirect)
+  "redirectUri": "https://...",   // Required: exact redirect URI used when redirecting to Google (e.g. your callback URL)
+  "role": "learner",              // Optional: user role (defaults to "learner")
+  "preferredLanguage": "en"       // Optional: preferred language (defaults to Google's locale)
 }
 ```
 
@@ -66,6 +69,17 @@ src/
   }
 }
 ```
+
+**What the service does**:
+1. Receives `code` and `redirectUri` (and optional `role`, `preferredLanguage`).
+2. Exchanges the code with Google for access/refresh tokens (using `redirectUri` so it matches the authorization request).
+3. Fetches user profile from Google (email, name, picture, locale).
+4. Creates or updates the user and authentication records in DynamoDB.
+5. Generates a JWT and returns `token` and `user` details.
+
+**Error Responses**:
+- `400 Bad Request`: Missing `code`, or Google OAuth error (e.g. `redirect_uri_mismatch`, `invalid_grant`). Response body includes `message` with details.
+- `500 Internal Server Error`: Secrets Manager, DynamoDB, or other server error. Check CloudWatch logs.
 
 ### Get Current User
 
@@ -117,10 +131,6 @@ src/
 - `401 Unauthorized`: Missing or invalid JWT token
 - `404 Not Found`: User not found
 
-**Error Responses**:
-- `400 Bad Request`: Missing or invalid `code`
-- `500 Internal Server Error`: Failed to authenticate with Google or generate token
-
 ## Environment Variables
 
 | Variable                 | Description |
@@ -131,74 +141,110 @@ src/
 | `PROJECT_NAME`           | Project name for Secrets Manager (default: "eislett-education") |
 | `ENVIRONMENT`            | Environment name (default: "dev") |
 
-## Secrets Configuration
+## AWS Secrets Required
 
-The service requires two secrets in AWS Secrets Manager:
+The auth service reads **two secrets** from **AWS Secrets Manager** (region `us-east-1`). The Lambda execution role must have `secretsmanager:GetSecretValue` on these secrets.
 
-### 1. JWT Access Token Secret
+Secret names are built as: `{PROJECT_NAME}-{ENVIRONMENT}-<secret-suffix>`.
 
-**Name**: `{project-name}-{environment}-jwt-access-token-secret`
+### 1. JWT access token secret
 
-**Format**: Plain string or JSON with `{"key": "your-secret"}`
+| Item | Value |
+|------|--------|
+| **Secret name** | `{project-name}-{environment}-jwt-access-token-secret` |
+| **Example (dev)** | `eislett-education-dev-jwt-access-token-secret` |
+| **Example (prod)** | `eislett-education-prod-jwt-access-token-secret` |
+| **Format** | Plain string (the JWT signing key), or JSON: `{"key": "your-secret"}` |
 
-**Example**:
+**Create (dev)**:
 ```bash
 aws secretsmanager create-secret \
   --name "eislett-education-dev-jwt-access-token-secret" \
-  --secret-string "your-jwt-secret-key-here" \
+  --secret-string "your-jwt-secret-key-at-least-32-chars" \
   --region us-east-1
 ```
 
-### 2. Google OAuth Secret
+**Update (if it already exists)**:
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id "eislett-education-dev-jwt-access-token-secret" \
+  --secret-string "your-jwt-secret-key-at-least-32-chars" \
+  --region us-east-1
+```
 
-**Name**: `{project-name}-{environment}-google-oauth-secret`
+### 2. Google OAuth secret
 
-**Format**: JSON with Google OAuth credentials
+| Item | Value |
+|------|--------|
+| **Secret name** | `{project-name}-{environment}-google-oauth-secret` |
+| **Example (dev)** | `eislett-education-dev-google-oauth-secret` |
+| **Example (prod)** | `eislett-education-prod-google-oauth-secret` |
+| **Format** | JSON with `clientId`, `clientSecret`, and `redirectUri` |
 
-**Example**:
+**JSON shape**:
 ```json
 {
-  "clientId": "your-google-client-id.apps.googleusercontent.com",
-  "clientSecret": "your-google-client-secret",
-  "redirectUri": "https://your-domain.com/auth/google/callback"
+  "clientId": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+  "clientSecret": "YOUR_CLIENT_SECRET",
+  "redirectUri": "https://your-app-domain.com/api/auth/callback"
 }
 ```
 
-**Create Secret**:
+- `redirectUri` must match exactly what the frontend uses when redirecting to Google, and must be listed in Google Cloud Console **Authorized redirect URIs**.
+
+**Create (dev)**:
 ```bash
 aws secretsmanager create-secret \
   --name "eislett-education-dev-google-oauth-secret" \
-  --secret-string '{"clientId":"...","clientSecret":"...","redirectUri":"..."}' \
+  --secret-string '{"clientId":"YOUR_CLIENT_ID.apps.googleusercontent.com","clientSecret":"YOUR_CLIENT_SECRET","redirectUri":"https://your-app-domain.com/api/auth/callback"}' \
   --region us-east-1
 ```
+
+**Update (if it already exists)**:
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id "eislett-education-dev-google-oauth-secret" \
+  --secret-string '{"clientId":"...","clientSecret":"...","redirectUri":"https://..."}' \
+  --region us-east-1
+```
+
+**Summary**
+
+| Secret | Purpose |
+|--------|---------|
+| `*-jwt-access-token-secret` | Signing key for JWTs returned by `POST /auth/google` and validated by protected routes. |
+| `*-google-oauth-secret` | Google OAuth client credentials and default redirect URI; used to exchange the authorization code and fetch user profile. |
 
 ## Google OAuth Setup
 
 1. **Create OAuth 2.0 Credentials**:
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project or select existing
-   - Enable Google+ API
-   - Create OAuth 2.0 Client ID
-   - Add authorized redirect URIs
+   - Go to [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials
+   - Create OAuth 2.0 Client ID (Web application)
+   - Add **Authorized redirect URIs** (e.g. `https://your-app.com/api/auth/callback`). This must match the `redirectUri` you send to `POST /auth/google`.
 
-2. **Store Credentials**:
-   - Store `clientId`, `clientSecret`, and `redirectUri` in AWS Secrets Manager
-   - Use the format shown above
+2. **Store credentials in AWS**:
+   - Create the Google OAuth secret in Secrets Manager (see [AWS Secrets Required](#aws-secrets-required)) with `clientId`, `clientSecret`, and `redirectUri`.
 
-3. **Frontend Flow**:
+3. **Frontend flow**:
    ```javascript
-   // 1. Redirect user to Google OAuth
-   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=email profile`;
+   // 1. Redirect user to Google (use the same redirectUri as your callback URL)
+   const redirectUri = `${window.location.origin}/api/auth/callback`;
+   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20email%20profile&access_type=offline&prompt=consent`;
    window.location.href = authUrl;
-   
-   // 2. After redirect, get code from query params
+
+   // 2. On your callback page (e.g. /api/auth/callback), read code from query
    const code = new URLSearchParams(window.location.search).get('code');
-   
-   // 3. Exchange code for JWT token
-   const response = await fetch('/auth/google', {
+
+   // 3. POST code and redirectUri to your backend; get token and user details
+   const response = await fetch('https://api.your-domain.com/v1/auth/google', {
      method: 'POST',
      headers: { 'Content-Type': 'application/json' },
-     body: JSON.stringify({ code, role: 'learner' })
+     body: JSON.stringify({
+       code,
+       redirectUri: `${window.location.origin}/api/auth/callback`,
+       role: 'learner',
+       preferredLanguage: 'en'
+     })
    });
    const { token, user } = await response.json();
    ```
