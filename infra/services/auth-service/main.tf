@@ -227,6 +227,8 @@ module "auth_service_lambda" {
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/auth-service/function.zip")
   iam_role_arn  = module.auth_service_iam_role.role_arn
+  timeout       = 15
+  memory_size   = 256
 
   environment_variables = {
     USERS_TABLE            = aws_dynamodb_table.users.name
