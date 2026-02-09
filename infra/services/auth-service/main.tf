@@ -222,7 +222,7 @@ resource "aws_iam_role_policy" "sns_publish" {
 module "auth_service_lambda" {
   source = "../../modules/lambda"
 
-  function_name = "auth-service"
+  function_name = "${var.project_name}-${var.environment}-auth-service"
   handler       = "dist/index.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/auth-service/function.zip")

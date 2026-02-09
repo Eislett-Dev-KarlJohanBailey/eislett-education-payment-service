@@ -249,7 +249,7 @@ resource "aws_iam_role_policy" "sqs_access" {
 module "entitlement_lambda" {
   source = "../../modules/lambda"
 
-  function_name = "entitlement-service"
+  function_name = "${var.project_name}-${var.environment}-entitlement-service"
   handler       = "dist/handler/index.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/entitlement-service/function.zip")

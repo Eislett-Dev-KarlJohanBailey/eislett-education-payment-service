@@ -143,7 +143,7 @@ resource "aws_iam_role_policy" "secrets_manager" {
 module "trial_service_lambda" {
   source = "../../modules/lambda"
 
-  function_name = "trial-service"
+  function_name = "${var.project_name}-${var.environment}-trial-service"
   handler       = "dist/handler/index.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/trial-service/function.zip")

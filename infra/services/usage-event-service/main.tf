@@ -140,7 +140,7 @@ resource "aws_iam_role_policy" "sqs_access" {
 module "usage_event_lambda" {
   source = "../../modules/lambda"
 
-  function_name = "usage-event-service"
+  function_name = "${var.project_name}-${var.environment}-usage-event-service"
   handler       = "dist/index.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/usage-event-service/function.zip")

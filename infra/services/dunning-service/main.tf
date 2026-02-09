@@ -225,7 +225,7 @@ resource "aws_iam_role_policy" "secrets_manager" {
 module "dunning_lambda" {
   source = "../../modules/lambda"
 
-  function_name = "dunning-service"
+  function_name = "${var.project_name}-${var.environment}-dunning-service"
   handler       = "dist/handler/index.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/dunning-service/function.zip")
@@ -251,7 +251,7 @@ resource "aws_lambda_event_source_mapping" "dunning_sqs_trigger" {
 module "dunning_api_lambda" {
   source = "../../modules/lambda"
 
-  function_name = "dunning-service-api"
+  function_name = "${var.project_name}-${var.environment}-dunning-service-api"
   handler       = "api-gateway.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/dunning-service/function.zip")

@@ -102,7 +102,7 @@ module "pricing_service_iam_role" {
 module "pricing_service_lambda" {
   source = "../../modules/lambda"
 
-  function_name = "pricing-service"
+  function_name = "${var.project_name}-${var.environment}-pricing-service"
   handler       = "dist/handler/index.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/pricing-service/function.zip")
