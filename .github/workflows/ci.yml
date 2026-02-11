@@ -91,7 +91,7 @@ jobs:
       - name: Bootstrap Terraform backend
         run: |
           PROJECT_NAME="${{ steps.project.outputs.project_name }}"
-          SERVICES="product-service pricing-service access-service entitlement-service stripe-service dunning-service trial-service transaction-service usage-event-service"
+          SERVICES="product-service pricing-service access-service entitlement-service stripe-service dunning-service trial-service transaction-service usage-event-service token-service"
           if [ "${{ vars.BUILD_AUTH_SERVICE }}" == "true" ]; then
             SERVICES="${SERVICES} auth-service"
           fi
@@ -187,6 +187,26 @@ jobs:
           
           # Then: entitlement-service (depends on product-service and access-service outputs)
           service="entitlement-service"
+          if [ ! -f "services/$service/function.zip" ]; then
+            echo "Error: function.zip not found at services/$service/function.zip"
+            exit 1
+          fi
+          PROJECT_NAME="${{ steps.project.outputs.project_name }}"
+          terraform -chdir=infra/services/$service init \
+            -backend-config="bucket=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state" \
+            -backend-config="key=tf-infra/${{ steps.env.outputs.environment }}.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="dynamodb_table=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state-locking" \
+            -backend-config="encrypt=true"
+          terraform -chdir=infra/services/$service apply -auto-approve \
+            -var="project_name=${PROJECT_NAME}" \
+            -var="environment=${{ steps.env.outputs.environment }}" \
+            -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
+            -var="state_region=${{ secrets.TF_STATE_REGION }}" \
+            -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
+          
+          # Then: token-service (depends on product-service, pricing-service, access-service, and entitlement-service outputs)
+          service="token-service"
           if [ ! -f "services/$service/function.zip" ]; then
             echo "Error: function.zip not found at services/$service/function.zip"
             exit 1
