@@ -9,14 +9,15 @@ export class ListProductsController {
   handle = async (req: RequestContext) => {
     const pageNumber = Number(req.query.page_number ?? 1);
     const pageSize = Number(req.query.page_size ?? 20);
-    
+
     const result = await this.useCase.execute({
       pageNumber,
       pageSize,
       type: req.query.type as any,
       isActive: req.query.active
         ? req.query.active === "true"
-        : undefined
+        : undefined,
+      entitlementKey: req.query.entitlement_key as string | undefined
     });
 
     // Transform to new response format

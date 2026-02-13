@@ -8,8 +8,7 @@ const {
   listProductsController,
   searchProductsController,
   updateProductController,
-  deleteProductController,
-  findProductByEntitlementKeyController
+  deleteProductController
 } = bootstrap();
 
 export const routes: Record<
@@ -19,7 +18,6 @@ export const routes: Record<
   "POST /products": createProductController.handle,
   "GET /products": listProductsController.handle,
   "GET /products/search": searchProductsController.handle,
-  "GET /products/by-entitlement/{entitlementKey}": findProductByEntitlementKeyController.handle,
   "GET /products/{id}": getProductController.handle,
   "PUT /products/{id}": updateProductController.handle,
   "DELETE /products/{id}": deleteProductController.handle

@@ -113,8 +113,12 @@ All product endpoints require authentication.
 | `page_size` | number | No | Page size (default: 20). |
 | `type` | string | No | Filter by type: `one_off`, `subscription`, `addon`. |
 | `active` | string | No | Filter by active: `"true"` or `"false"`. |
+| `entitlement_key` | string | No | Only products that include this entitlement (e.g. `ai_tutor_access` or `ai-tutor-access`). If omitted with `type`, searches all types. |
 
-**Example**: `GET /products?page_number=1&page_size=20&type=subscription&active=true`
+**Examples**:
+- `GET /products?page_number=1&page_size=20&type=subscription&active=true`
+- `GET /products?entitlement_key=ai_tutor_access` — products that include the AI tutor entitlement (all types)
+- `GET /products?entitlement_key=ai-tutor-access&type=one_off` — one-off products with that entitlement
 
 **Response (200)**:
 
