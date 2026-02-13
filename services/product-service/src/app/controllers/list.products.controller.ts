@@ -9,6 +9,9 @@ export class ListProductsController {
   handle = async (req: RequestContext) => {
     const pageNumber = Number(req.query.page_number ?? 1);
     const pageSize = Number(req.query.page_size ?? 20);
+    // Support both entitlement_key (snake) and entitlementKey (camel); ignore empty string
+    const entitlementKeyRaw = req.query.entitlement_key ?? req.query.entitlementKey;
+    const entitlementKey = typeof entitlementKeyRaw === "string" && entitlementKeyRaw.trim() ? entitlementKeyRaw.trim() : undefined;
 
     const result = await this.useCase.execute({
       pageNumber,
@@ -17,7 +20,7 @@ export class ListProductsController {
       isActive: req.query.active
         ? req.query.active === "true"
         : undefined,
-      entitlementKey: req.query.entitlement_key as string | undefined
+      entitlementKey
     });
 
     // Transform to new response format
