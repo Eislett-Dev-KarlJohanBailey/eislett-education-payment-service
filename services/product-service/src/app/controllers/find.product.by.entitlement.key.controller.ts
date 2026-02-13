@@ -7,11 +7,12 @@ export class FindProductByEntitlementKeyController {
   ) {}
 
   handle = async (req: RequestContext) => {
-    const entitlementKey = req.pathParams.entitlementKey;
-    
+    let entitlementKey = req.pathParams.entitlementKey;
     if (!entitlementKey) {
       throw new Error("entitlementKey is required");
     }
+    // Allow kebab-case in URL: ai-tutor-access -> ai_tutor_access
+    entitlementKey = entitlementKey.replace(/-/g, "_");
 
     return this.useCase.execute(entitlementKey);
   };
