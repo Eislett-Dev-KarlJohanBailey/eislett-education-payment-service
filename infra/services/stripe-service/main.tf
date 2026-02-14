@@ -230,7 +230,7 @@ module "stripe_service_lambda" {
   function_name = "${var.project_name}-${var.environment}-stripe-service"
   handler       = "index.handler"
   runtime       = "nodejs20.x"
-  filename      = abspath("${path.cwd}/services/stripe-service/function.zip")
+  filename      = abspath("${path.module}/../../services/stripe-service/function.zip")
   iam_role_arn  = module.stripe_service_iam_role.role_arn
   timeout       = 30
   memory_size   = 256
