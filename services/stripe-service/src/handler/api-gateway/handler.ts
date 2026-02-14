@@ -62,8 +62,18 @@ function findRouteHandler(method: string, path: string, pathParams: Record<strin
   return null;
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+};
+
 export async function apiHandler(event: APIGatewayProxyEvent) {
   try {
+    if (event.httpMethod === "OPTIONS") {
+      return { statusCode: 204, headers: CORS_HEADERS, body: "" };
+    }
+
     console.log("Received event:", JSON.stringify(event, null, 2));
     
     const req = parseRequest(event);
