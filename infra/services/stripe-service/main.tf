@@ -227,7 +227,7 @@ resource "aws_iam_role_policy" "secrets_manager" {
 module "stripe_service_lambda" {
   source = "../../modules/lambda"
 
-  function_name = "stripe-service"
+  function_name = "${var.project_name}-${var.environment}-stripe-service"
   handler       = "dist/handler/index.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/stripe-service/function.zip")

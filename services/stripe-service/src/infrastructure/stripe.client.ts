@@ -104,6 +104,14 @@ export class StripeClient {
       };
     }
 
+    // For payment mode, set payment_intent_data.metadata so the PaymentIntent has metadata.
+    // Stripe does not copy session metadata to the PaymentIntent, so payment_intent.succeeded would otherwise have empty metadata.
+    if (mode === "payment") {
+      sessionParams.payment_intent_data = {
+        metadata: params.metadata || {},
+      };
+    }
+
     return await this.client.checkout.sessions.create(sessionParams);
   }
 

@@ -1,11 +1,11 @@
-
-import { CreateProductUseCase, GetProductUseCase, UpdateProductUseCase, DeleteProductUseCase, DynamoProductRepository, ListProductsUseCase, SearchProductsUseCase } from "@libs/domain";
+import { CreateProductUseCase, GetProductUseCase, UpdateProductUseCase, DeleteProductUseCase, DynamoProductRepository, ListProductsUseCase, SearchProductsUseCase, FindProductByEntitlementKeyUseCase } from "@libs/domain";
 import { CreateProductController } from "./app/controllers/create.product.controller";
 import { ListProductsController } from "./app/controllers/list.products.controller";
 import { SearchProductsController } from "./app/controllers/search.products.controller";
 import { GetProductController } from "./app/controllers/get.product.controller";
 import { UpdateProductController } from "./app/controllers/update.product.controller";
 import { DeleteProductController } from "./app/controllers/delete.product.controller";
+import { FindProductByEntitlementKeyController } from "./app/controllers/find.product.by.entitlement.key.controller";
 
 export function bootstrap() {
   const productRepo = new DynamoProductRepository();
@@ -28,7 +28,9 @@ export function bootstrap() {
     ),
     deleteProductController: new DeleteProductController(
       new DeleteProductUseCase(productRepo)
+    ),
+    findProductByEntitlementKeyController: new FindProductByEntitlementKeyController(
+      new FindProductByEntitlementKeyUseCase(productRepo)
     )
   };
 }
-``

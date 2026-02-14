@@ -105,10 +105,11 @@ export class Price {
   }
 
   updateCurrency(currency: string): void {
-    if (!currency || currency.trim().length !== 3) {
-      throw new DomainError("Currency must be a 3-letter code (e.g., USD)");
+    const normalized = currency?.trim().toUpperCase() ?? "";
+    if (!this.isValidCurrency(normalized)) {
+      throw new DomainError("Currency must be a 3-letter code (e.g., USD) or 'token'");
     }
-    this._currency = currency.trim().toUpperCase();
+    this._currency = normalized;
     this.touch();
   }
 
@@ -187,8 +188,8 @@ export class Price {
       throw new DomainError("Amount cannot be negative");
     }
 
-    if (!this._currency || this._currency.trim().length !== 3) {
-      throw new DomainError("Currency must be a 3-letter code (e.g., USD)");
+    if (!this._currency || !this.isValidCurrency(this._currency.trim().toUpperCase())) {
+      throw new DomainError("Currency must be a 3-letter code (e.g., USD) or 'token'");
     }
 
     if (this._billingType === BillingType.RECURRING && !this._interval) {
@@ -206,5 +207,9 @@ export class Price {
 
   private touch(): void {
     this._updatedAt = new Date();
+  }
+
+  private isValidCurrency(currency: string): boolean {
+    return currency.length === 3 || currency === "TOKEN";
   }
 }

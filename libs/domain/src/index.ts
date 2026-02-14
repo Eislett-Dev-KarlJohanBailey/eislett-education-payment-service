@@ -60,6 +60,7 @@ export * from "./products/app/usecases/get.product.usecase";
 export * from "./products/app/usecases/delete.product.usecase";
 export * from "./products/app/usecases/list.product.usecase";
 export * from "./products/app/usecases/search.product.usecase";
+export * from "./products/app/usecases/find.product.by.entitlement.key.usecase";
 export * from "./products/dynamodb/product.mapper";
 export * from "./products/dynamodb/product.repository";
 export * as ProductRepositoryPorts from "./products/app/ports/product.repository.port"; // PaginatedResult and Pagination are re-exported from pricing

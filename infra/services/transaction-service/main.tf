@@ -210,7 +210,7 @@ resource "aws_iam_role_policy" "secrets_manager" {
 module "transaction_lambda" {
   source = "../../modules/lambda"
 
-  function_name = "transaction-service"
+  function_name = "${var.project_name}-${var.environment}-transaction-service"
   handler       = "dist/handler/index.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/transaction-service/function.zip")
@@ -225,7 +225,7 @@ module "transaction_lambda" {
 module "transaction_api_lambda" {
   source = "../../modules/lambda"
 
-  function_name = "transaction-service-api"
+  function_name = "${var.project_name}-${var.environment}-transaction-service-api"
   handler       = "dist/api-gateway.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/transaction-service/function.zip")

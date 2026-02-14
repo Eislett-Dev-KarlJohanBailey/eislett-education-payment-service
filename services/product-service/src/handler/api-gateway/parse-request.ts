@@ -34,7 +34,23 @@ export function parseRequest(event: APIGatewayProxyEvent): RequestContext {
       }
     }
   }
-  
+  // Fallback: parse from rawQueryString (e.g. API Gateway HTTP API or when queryStringParameters is missing)
+  const rawQuery = (event as any).rawQueryString ?? (typeof event.path === "string" && event.path.includes("?") ? event.path.split("?")[1] : null);
+  if (rawQuery && typeof rawQuery === "string") {
+    for (const pair of rawQuery.split("&")) {
+      const eq = pair.indexOf("=");
+      const key = eq >= 0 ? pair.slice(0, eq) : pair;
+      const value = eq >= 0 ? pair.slice(eq + 1) : "";
+      if (key) {
+        try {
+          query[decodeURIComponent(key)] = decodeURIComponent(value.replace(/\+/g, " "));
+        } catch {
+          query[key] = value;
+        }
+      }
+    }
+  }
+
   return {
     method: event.httpMethod,
     path: path,

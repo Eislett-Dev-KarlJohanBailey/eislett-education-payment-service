@@ -2,6 +2,8 @@
 
 Complete reference for all API endpoints, SNS topics, and SQS queues in the payment service ecosystem.
 
+**For full endpoint details** (every request body, query param, path param, and response shape), see **[ENDPOINTS-REFERENCE.md](./ENDPOINTS-REFERENCE.md)**.
+
 ## Table of Contents
 
 - [API Endpoints](#api-endpoints)

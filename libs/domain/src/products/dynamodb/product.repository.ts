@@ -95,6 +95,10 @@ import { PaginatedResult } from "../app/ports/product.repository.port";
           ? `TYPE#${filters.type}`
           : `TYPE#${ProductType.SUBSCRIPTION}`; // default view
 
+      // When filtering by entitlementKey (or namePrefix), fetch larger batches so we can fill a page without many round trips
+      const hasClientSideFilter = Boolean(filters.entitlementKey || filters.namePrefix);
+      const dynamoLimit = hasClientSideFilter ? Math.max(pageSize * 5, 100) : pageSize;
+
       // Continue fetching until we have enough filtered items for the target page
       while (filteredScanned < pageNumber * pageSize) {
         const filterExpressions: string[] = [];
@@ -116,7 +120,7 @@ import { PaginatedResult } from "../app/ports/product.repository.port";
             ...(filterExpressions.length > 0 && {
               FilterExpression: filterExpressions.join(" AND ")
             }),
-            Limit: pageSize,
+            Limit: dynamoLimit,
             ExclusiveStartKey: lastEvaluatedKey
           })
         );
@@ -127,11 +131,18 @@ import { PaginatedResult } from "../app/ports/product.repository.port";
         
         // Filter by namePrefix if provided (client-side filtering since begins_with can't be used in FilterExpression)
         if (filters.namePrefix) {
-          batch = batch.filter(product => 
+          batch = batch.filter(product =>
             product.name.toLowerCase().startsWith(filters.namePrefix!.toLowerCase())
           );
         }
-        
+
+        // Filter by entitlementKey if provided (only products that include this entitlement)
+        if (filters.entitlementKey) {
+          batch = batch.filter(product =>
+            product.entitlements.some(e => e === filters.entitlementKey)
+          );
+        }
+
         // Only add items that belong to the target page
         const startIndex = (pageNumber - 1) * pageSize;
         const endIndex = pageNumber * pageSize;

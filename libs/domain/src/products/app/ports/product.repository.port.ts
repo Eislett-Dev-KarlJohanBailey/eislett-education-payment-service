@@ -5,6 +5,7 @@ export interface ProductListFilters {
   type?: ProductType;       // subscription | one_off | addon
   isActive?: boolean;
   namePrefix?: string;      // optional prefix search
+  entitlementKey?: string;  // only products that include this entitlement (snake_case, e.g. ai_tutor_access)
 }
 
 export interface Pagination {
