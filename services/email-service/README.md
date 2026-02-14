@@ -48,6 +48,8 @@ Bucket: `{project_name}-{env}-email-service-templates`.
 - **partials/*.hbs**: Any other partials (name = filename without `.hbs`).
 - **welcome.hbs**, etc.: Page templates; receive `content` and can use `{{> header}}`, `{{> footer}}`.
 
+Partials use the **same** `content` object as the main template. Any variable you put in `content` (e.g. `siteName`, `unsubscribeUrl`) is available in partials—e.g. `{{siteName}}` in `header.hbs` and `{{unsubscribeUrl}}` in `footer.hbs`.
+
 Upload the files from `services/email-service/templates/` (e.g. `layout.hbs`, `partials/header.hbs`, `partials/footer.hbs`, `welcome.hbs`) to the bucket.
 
 ## No-reply secret (Secrets Manager)

@@ -166,26 +166,6 @@ jobs:
           fi
           
           # Then: entitlement-service (creates billing-events and entitlement-updates SNS topics; must run before transaction-service and dunning-service)
-          service="trial-service"
-          if [ ! -f "services/$service/function.zip" ]; then
-            echo "Error: function.zip not found at services/$service/function.zip"
-            exit 1
-          fi
-          PROJECT_NAME="${{ steps.project.outputs.project_name }}"
-          terraform -chdir=infra/services/$service init \
-            -backend-config="bucket=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state" \
-            -backend-config="key=tf-infra/${{ steps.env.outputs.environment }}.tfstate" \
-            -backend-config="region=us-east-1" \
-            -backend-config="dynamodb_table=${PROJECT_NAME}-${{ steps.env.outputs.environment }}-${service}-state-locking" \
-            -backend-config="encrypt=true"
-          terraform -chdir=infra/services/$service apply -auto-approve \
-            -var="project_name=${PROJECT_NAME}" \
-            -var="environment=${{ steps.env.outputs.environment }}" \
-            -var="state_bucket_name=${{ secrets.TF_STATE_BUCKET_NAME }}" \
-            -var="state_region=${{ secrets.TF_STATE_REGION }}" \
-            -var="state_bucket_key=${{ secrets.TF_STATE_BUCKET_KEY }}"
-          
-          # Then: entitlement-service (depends on product-service and access-service outputs)
           service="entitlement-service"
           if [ ! -f "services/$service/function.zip" ]; then
             echo "Error: function.zip not found at services/$service/function.zip"
