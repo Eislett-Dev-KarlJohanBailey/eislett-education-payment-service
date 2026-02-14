@@ -211,7 +211,7 @@ module "transaction_lambda" {
   source = "../../modules/lambda"
 
   function_name = "${var.project_name}-${var.environment}-transaction-service"
-  handler       = "dist/handler/index.handler"
+  handler       = "index.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/transaction-service/function.zip")
   iam_role_arn  = module.transaction_service_iam_role.role_arn
@@ -226,7 +226,7 @@ module "transaction_api_lambda" {
   source = "../../modules/lambda"
 
   function_name = "${var.project_name}-${var.environment}-transaction-service-api"
-  handler       = "dist/api-gateway.handler"
+  handler       = "api-gateway.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/transaction-service/function.zip")
   iam_role_arn  = module.transaction_service_iam_role.role_arn

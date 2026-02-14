@@ -226,7 +226,7 @@ module "dunning_lambda" {
   source = "../../modules/lambda"
 
   function_name = "${var.project_name}-${var.environment}-dunning-service"
-  handler       = "dist/handler/index.handler"
+  handler       = "index.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/dunning-service/function.zip")
   iam_role_arn  = module.dunning_iam_role.role_arn
