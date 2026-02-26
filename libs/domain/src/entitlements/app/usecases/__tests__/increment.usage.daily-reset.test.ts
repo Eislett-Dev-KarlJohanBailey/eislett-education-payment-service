@@ -71,6 +71,8 @@ describe("IncrementUsageUseCase – daily reset (24-hour slots)", () => {
       findByUserAndKey,
       save: jest.fn(),
       update,
+      deleteAll: jest.fn().mockResolvedValue({ deleted: 0 }),
+      deleteByUserAndKey: jest.fn().mockResolvedValue(false),
     };
 
     const useCase = new IncrementUsageUseCase(repo);
