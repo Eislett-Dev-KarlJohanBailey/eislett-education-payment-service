@@ -87,6 +87,7 @@ import { EntitlementUsage } from "../domain/entities/entitlement-usage.entity";
             TableName: this.tableName,
             ExclusiveStartKey: lastEvaluatedKey,
             ProjectionExpression: "PK, SK",
+            Limit: BATCH_SIZE,
           })
         );
         const items = scanResult.Items ?? [];
