@@ -124,7 +124,7 @@ module "access_service_lambda" {
   source = "../../modules/lambda"
 
   function_name = "${var.project_name}-${var.environment}-access-service"
-  handler       = "dist/handler/index.handler"
+  handler       = "index.handler"
   runtime       = "nodejs20.x"
   filename      = abspath("${path.cwd}/services/access-service/function.zip")
   iam_role_arn  = module.access_service_iam_role.role_arn
@@ -132,6 +132,7 @@ module "access_service_lambda" {
   environment_variables = {
     ENTITLEMENTS_TABLE      = aws_dynamodb_table.entitlements.name
     JWT_ACCESS_TOKEN_SECRET = local.jwt_access_token_secret
+    ENVIRONMENT             = var.environment
   }
 }
 

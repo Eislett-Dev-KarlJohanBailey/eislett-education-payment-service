@@ -54,6 +54,14 @@ export function errorResponse(error: any): APIGatewayProxyResult {
     });
   }
 
+  // Forbidden (e.g. dev-only endpoint in prod)
+  if (error.name === "ForbiddenError") {
+    return response(403, {
+      error: "FORBIDDEN",
+      message: error.message
+    });
+  }
+
   // Fallback (log for debugging, but never leak internals to client)
   console.error("Unhandled error:", error);
   console.error("Error stack:", error.stack);

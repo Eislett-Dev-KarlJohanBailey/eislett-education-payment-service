@@ -7,6 +7,7 @@ import {
 import { GetUserEntitlementsController } from "./app/controllers/get.user.entitlements.controller";
 import { GetUserEntitlementByKeyController } from "./app/controllers/get.user.entitlement.by.key.controller";
 import { IncrementUsageController } from "./app/controllers/increment.usage.controller";
+import { DeleteAllEntitlementsController, DeleteEntitlementByKeyController } from "./app/controllers/delete.entitlements.controller";
 
 export function bootstrap() {
   const entitlementsTableName = process.env.ENTITLEMENTS_TABLE;
@@ -27,5 +28,7 @@ export function bootstrap() {
     incrementUsageController: new IncrementUsageController(
       new IncrementUsageUseCase(entitlementRepo)
     ),
+    deleteAllEntitlementsController: new DeleteAllEntitlementsController(entitlementRepo),
+    deleteEntitlementByKeyController: new DeleteEntitlementByKeyController(entitlementRepo),
   };
 }
