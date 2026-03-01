@@ -3,10 +3,11 @@ import {
   DynamoPriceRepository,
   DynamoProductRepository,
   ProductRepositoryPorts,
+  CreateEntitlementUseCase,
+  SyncProductLimitsToEntitlementsUseCase,
 } from "@libs/domain";
 import { ChargeTokenUseCase } from "./app/usecases/charge.token.usecase";
 import { ChargeTokenController } from "./app/controllers/charge.token.controller";
-import { BillingEventPublisher } from "./infrastructure/event.publisher";
 
 export function bootstrap() {
   const entitlementsTableName = process.env.ENTITLEMENTS_TABLE;
@@ -26,13 +27,18 @@ export function bootstrap() {
   const entitlementRepo = new DynamoEntitlementRepository(entitlementsTableName);
   const priceRepo = new DynamoPriceRepository();
   const productRepo = new DynamoProductRepository();
-  const eventPublisher = new BillingEventPublisher();
+  const createEntitlementUseCase = new CreateEntitlementUseCase(entitlementRepo);
+  const syncProductLimitsUseCase = new SyncProductLimitsToEntitlementsUseCase(
+    productRepo,
+    entitlementRepo
+  );
 
   const chargeTokenUseCase = new ChargeTokenUseCase(
     entitlementRepo,
     priceRepo,
     productRepo as ProductRepositoryPorts.ProductRepository,
-    eventPublisher
+    createEntitlementUseCase,
+    syncProductLimitsUseCase
   );
 
   return {

@@ -7,7 +7,7 @@ A serverless Lambda function service that handles token-based purchases. Users c
 The Token Service provides:
 - **Token-based Purchases**: Allows users to purchase products using their token entitlement balance
 - **Balance Validation**: Checks user's token balance before processing purchase
-- **Event Publishing**: Publishes billing events to SNS for entitlement processing
+- **Immediate Entitlement Grant**: Applies product entitlements directly in the request (no SQS) for faster access
 - **JWT Authentication**: All endpoints require authentication
 
 ## Features
@@ -15,8 +15,8 @@ The Token Service provides:
 - **Token Balance Check**: Validates user has sufficient tokens before purchase
 - **Price Validation**: Ensures price currency is "token"
 - **Usage Decrement**: Decrements user's token entitlement balance
-- **Event Publishing**: Publishes payment.successful events to SNS
-- **Idempotency**: Generates unique payment intent IDs for tracking
+- **Inline Entitlement Application**: Creates/updates product entitlements for the user in the same request (same logic as entitlement-service for one-time payments)
+- **Payment Intent ID**: Generates unique payment intent IDs for reference
 
 ## Architecture
 
@@ -31,7 +31,8 @@ User Request (JWT + priceId) → API Gateway → Lambda
         ↓                                   ↓
   Get Product                  Decrement Tokens
         ↓                                   ↓
-  Publish Event                Return Result
+  Apply Product Entitlements   Return Result
+  (inline, no SQS)
 ```
 
 ## Environment Variables
@@ -41,7 +42,6 @@ User Request (JWT + priceId) → API Gateway → Lambda
 - `ENTITLEMENTS_TABLE` - DynamoDB table name (from access-service)
 - `PRODUCTS_TABLE` - DynamoDB table name (from product-service)
 - `PRICES_TABLE` - DynamoDB table name (from pricing-service)
-- `BILLING_EVENTS_TOPIC_ARN` - SNS topic ARN (from entitlement-service)
 - `JWT_ACCESS_TOKEN_SECRET` - JWT secret for authentication (from Secrets Manager)
 
 ## API Endpoints
@@ -90,7 +90,7 @@ curl -X POST https://api.example.com/token/charge \
 4. **Token Check**: Retrieves user's "token" entitlement and checks balance
 5. **Balance Validation**: Ensures user has sufficient tokens
 6. **Token Decrement**: Increases `used` amount in entitlement (decreasing available balance)
-7. **Event Publishing**: Publishes `payment.successful` event to SNS
+7. **Apply Entitlements**: Creates/updates the product's entitlements for the user inline (one-time payment logic: create or activate entitlements, sync product usage limits)
 8. **Response**: Returns success status, payment intent ID, amount charged, and remaining balance
 
 ## Token Entitlement
@@ -102,16 +102,12 @@ Users must have a "token" entitlement with usage tracking enabled. The entitleme
 
 When a purchase is made, the `used` counter is increased by the price amount, effectively decreasing available tokens.
 
-## Billing Events
+## Entitlement Application
 
-The service publishes `payment.successful` events to the billing events SNS topic. These events are processed by:
-- **Entitlement Service**: Creates/updates product entitlements for the user
-- **Transaction Service**: Records the transaction
-- **Dunning Service**: Tracks payment status (if applicable)
+The token charge endpoint applies product entitlements directly in the same request (no SQS or SNS). It uses the same logic as the entitlement-service for one-time payments: create or activate entitlements for each product entitlement key, then sync the product's usage limits to the user's entitlements (e.g. permanent limit for one-time purchases). This gives the user immediate access without waiting for async event processing.
 
 ## Dependencies
 
 - **Product Service**: Provides product information
 - **Pricing Service**: Provides price information
-- **Access Service**: Provides entitlement information
-- **Entitlement Service**: Provides billing events SNS topic
+- **Access Service**: Provides entitlement information (DynamoDB entitlements table)
