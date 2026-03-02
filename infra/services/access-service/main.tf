@@ -132,6 +132,7 @@ module "access_service_lambda" {
   environment_variables = {
     ENTITLEMENTS_TABLE      = aws_dynamodb_table.entitlements.name
     JWT_ACCESS_TOKEN_SECRET = local.jwt_access_token_secret
+    ENVIRONMENT             = var.environment
   }
 }
 

@@ -2,10 +2,12 @@ import {
   EntitlementRepository,
   PriceRepository,
   ProductRepositoryPorts,
-  BillingEvent,
+  CreateEntitlementUseCase,
+  SyncProductLimitsToEntitlementsUseCase,
+  EntitlementKey,
+  EntitlementStatus,
   DomainError,
 } from "@libs/domain";
-import { BillingEventPublisher } from "../../infrastructure/event.publisher";
 
 class NotFoundError extends DomainError {
   constructor(message: string) {
@@ -26,12 +28,15 @@ export interface ChargeTokenOutput {
   remainingTokens: number;
 }
 
+const ROLE_LEARNER = "learner" as const;
+
 export class ChargeTokenUseCase {
   constructor(
     private readonly entitlementRepo: EntitlementRepository,
     private readonly priceRepo: PriceRepository,
     private readonly productRepo: ProductRepositoryPorts.ProductRepository,
-    private readonly eventPublisher: BillingEventPublisher
+    private readonly createEntitlementUseCase: CreateEntitlementUseCase,
+    private readonly syncProductLimitsUseCase: SyncProductLimitsToEntitlementsUseCase
   ) {}
 
   async execute(input: ChargeTokenInput): Promise<ChargeTokenOutput> {
@@ -109,27 +114,11 @@ export class ChargeTokenUseCase {
     entitlement.usage.used += requiredAmount;
     await this.entitlementRepo.update(entitlement);
 
-    // Generate payment intent ID (for idempotency tracking)
+    // Generate payment intent ID (for reference)
     const paymentIntentId = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-    // Publish payment.successful event
-    const event: BillingEvent.PaymentSuccessfulEvent = {
-      type: BillingEvent.PaymentEventType.PAYMENT_SUCCESSFUL,
-      payload: {
-        paymentIntentId,
-        userId,
-        amount: requiredAmount,
-        currency: "token",
-        priceId: price.priceId,
-        productId: product.productId,
-        billingType: price.billingType === "one_time" ? "one_time" : "recurring",
-        provider: "token" as any, // Token is a custom provider
-      },
-      meta: this.eventPublisher.createMetadata("token-service"),
-      version: 1,
-    };
-
-    await this.eventPublisher.publish(event);
+    // Apply product entitlements directly (no SQS) so the user gets access immediately
+    await this.applyProductEntitlementsForOneTime(userId, product, ROLE_LEARNER);
 
     // Get final token balance
     const finalEntitlement = await this.entitlementRepo.findByUserAndKey(
@@ -147,5 +136,40 @@ export class ChargeTokenUseCase {
       amount: requiredAmount,
       remainingTokens,
     };
+  }
+
+  /**
+   * Applies product entitlements for a one-time token purchase (same logic as entitlement-service
+   * handlePaymentSuccessful for one_time), so the user gets access immediately without waiting for SQS.
+   */
+  private async applyProductEntitlementsForOneTime(
+    userId: string,
+    product: { productId: string; entitlements: readonly string[] },
+    role: "learner"
+  ): Promise<void> {
+    for (const key of product.entitlements) {
+      const entitlementKey = key as EntitlementKey;
+      const existing = await this.entitlementRepo.findByUserAndKey(
+        userId,
+        entitlementKey
+      );
+      if (existing) {
+        existing.status = EntitlementStatus.ACTIVE;
+        await this.entitlementRepo.update(existing);
+      } else {
+        await this.createEntitlementUseCase.execute({
+          userId,
+          key: entitlementKey,
+          role,
+          expiresAt: undefined,
+        });
+      }
+    }
+    await this.syncProductLimitsUseCase.execute({
+      productId: product.productId,
+      userId,
+      isAddon: false,
+      isOneTimePayment: true,
+    });
   }
 }

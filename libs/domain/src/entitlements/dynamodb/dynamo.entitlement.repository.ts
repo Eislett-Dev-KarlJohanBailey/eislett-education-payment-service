@@ -5,7 +5,10 @@ import {
     DynamoDBDocumentClient,
     PutCommand,
     QueryCommand,
-    GetCommand
+    GetCommand,
+    ScanCommand,
+    BatchWriteCommand,
+    DeleteCommand,
   } from "@aws-sdk/lib-dynamodb";
 import { EntitlementRepository } from "../app/ports/entitlement.repository";
 import { Entitlement } from "../domain/entities/entitlement.entity";
@@ -72,7 +75,62 @@ import { EntitlementUsage } from "../domain/entities/entitlement-usage.entity";
       // Put is idempotent for this model
       await this.save(entitlement);
     }
-  
+
+    async deleteAll(): Promise<{ deleted: number }> {
+      let deleted = 0;
+      let lastEvaluatedKey: Record<string, any> | undefined;
+      const BATCH_SIZE = 25;
+
+      do {
+        const scanResult = await this.client.send(
+          new ScanCommand({
+            TableName: this.tableName,
+            ExclusiveStartKey: lastEvaluatedKey,
+            ProjectionExpression: "PK, SK",
+            Limit: BATCH_SIZE,
+          })
+        );
+        const items = scanResult.Items ?? [];
+        lastEvaluatedKey = scanResult.LastEvaluatedKey;
+
+        if (items.length === 0) break;
+
+        await this.client.send(
+          new BatchWriteCommand({
+            RequestItems: {
+              [this.tableName]: items.map((item) => ({
+                DeleteRequest: { Key: { PK: item.PK, SK: item.SK } },
+              })),
+            },
+          })
+        );
+        deleted += items.length;
+      } while (lastEvaluatedKey);
+
+      return { deleted };
+    }
+
+    async deleteByUserAndKey(userId: string, entitlementKey: string): Promise<boolean> {
+      const key = {
+        PK: `USER#${userId}`,
+        SK: `ENTITLEMENT#${entitlementKey}`,
+      };
+      const getResult = await this.client.send(
+        new GetCommand({
+          TableName: this.tableName,
+          Key: key,
+        })
+      );
+      if (!getResult.Item) return false;
+      await this.client.send(
+        new DeleteCommand({
+          TableName: this.tableName,
+          Key: key,
+        })
+      );
+      return true;
+    }
+
     // ---------- Mapping ----------
 
     private omitUndefined(obj: Record<string, unknown>): Record<string, unknown> {

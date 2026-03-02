@@ -41,6 +41,10 @@ The service requires the following environment variables:
 - `ENTITLEMENTS_TABLE` - Name of the DynamoDB table storing entitlements
 - `JWT_ACCESS_TOKEN_SECRET` - Secret key for verifying JWT access tokens (automatically retrieved from AWS Secrets Manager)
 
+### Optional
+
+- `ENVIRONMENT` - Current environment (e.g. `dev`, `development`, `prod`). Used to restrict delete-entitlements endpoints to dev/development only. Set by Terraform from `var.environment`.
+
 ### JWT Secret Configuration
 
 The JWT secret is automatically retrieved from **AWS Secrets Manager** during deployment. The secret name follows this format:
@@ -401,6 +405,81 @@ curl -X POST "https://api.example.com/access/usage/AI_TOKENS" \
 ```
 
 **Note:** If the entitlement has a reset period (e.g. monthly), usage is lazily reset when it is read or incremented after the reset date. The returned `limit` and `remaining` reflect the current period.
+
+### Delete entitlements (dev / development only)
+
+These endpoints are **only allowed when `ENVIRONMENT` is `dev` or `development`**. In any other environment they return **403 Forbidden**.
+
+#### Delete all entitlements
+```
+DELETE /access/entitlements
+```
+
+Deletes every item in the entitlements table. Use only for clearing dev data.
+
+**Authentication:** Required (Bearer JWT).
+
+**Response (200 OK):**
+```json
+{
+  "deleted": 42,
+  "message": "Deleted 42 entitlement(s)"
+}
+```
+
+**Error Responses:**
+- **403 Forbidden** – Not in dev/development:
+```json
+{
+  "error": "FORBIDDEN",
+  "message": "Delete all entitlements is only allowed in dev or development environment"
+}
+```
+
+**Example:**
+```bash
+curl -X DELETE "https://api.example.com/v1/access/entitlements" \
+  -H "Authorization: Bearer <jwt-token>"
+```
+
+#### Delete entitlement by key (for current user)
+```
+DELETE /access/entitlements/:key
+```
+
+Deletes the entitlement with the given key for the authenticated user (e.g. `DELETE /access/entitlements/wittytalk-premium`).
+
+**Authentication:** Required (Bearer JWT).
+
+**Path Parameters:**
+- `key` (required) – The entitlement key to delete (e.g. `wittytalk-premium`, `AI_TOKENS`).
+
+**Response (200 OK):**
+```json
+{
+  "deleted": true,
+  "key": "wittytalk-premium",
+  "message": "Deleted entitlement wittytalk-premium for user"
+}
+```
+
+**Error Responses:**
+- **403 Forbidden** – Not in dev/development (same body as above).
+- **404 Not Found** – No entitlement for this user with that key:
+```json
+{
+  "error": "NOT_FOUND",
+  "message": "Entitlement not found for key: wittytalk-premium"
+}
+```
+
+**Example:**
+```bash
+curl -X DELETE "https://api.example.com/v1/access/entitlements/wittytalk-premium" \
+  -H "Authorization: Bearer <jwt-token>"
+```
+
+**Environment:** The Lambda must have `ENVIRONMENT` set (e.g. to `dev` or `development`) for these endpoints to be allowed; it is set from Terraform `var.environment`.
 
 ## Entitlement Types
 

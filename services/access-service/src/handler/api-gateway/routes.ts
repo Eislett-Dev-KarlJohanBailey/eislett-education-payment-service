@@ -5,6 +5,8 @@ const {
   getUserEntitlementsController,
   getUserEntitlementByKeyController,
   incrementUsageController,
+  deleteAllEntitlementsController,
+  deleteEntitlementByKeyController,
 } = bootstrap();
 
 export const routes: Record<
@@ -14,4 +16,6 @@ export const routes: Record<
   "GET /access": getUserEntitlementsController.handle,
   "POST /access/usage/:key": incrementUsageController.handle, // before /access/:key so path /access/usage/X is not matched as key=usage
   "GET /access/:key": getUserEntitlementByKeyController.handle,
+  "DELETE /access/entitlements": deleteAllEntitlementsController.handle,
+  "DELETE /access/entitlements/:key": deleteEntitlementByKeyController.handle,
 };
