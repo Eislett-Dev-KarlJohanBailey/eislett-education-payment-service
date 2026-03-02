@@ -1,5 +1,12 @@
 import { APIGatewayProxyResult } from "aws-lambda";
 
+/** CORS headers for all origins */
+export const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
+};
+
 export function response(
   statusCode: number,
   body: unknown
@@ -7,7 +14,8 @@ export function response(
   return {
     statusCode,
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...corsHeaders,
     },
     body: JSON.stringify(body)
   };
