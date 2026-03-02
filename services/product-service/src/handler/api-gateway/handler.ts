@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent } from "aws-lambda";
 import { parseRequest } from "./parse-request";
 import { routes } from "./routes";
-import { response, errorResponse } from "./response";
+import { response, errorResponse, corsHeaders } from "./response";
 
 /**
  * Normalizes the path by removing /v1 prefix if present
@@ -66,6 +66,11 @@ function findRouteHandler(method: string, path: string): ((req: any) => Promise<
 
 export async function apiHandler(event: APIGatewayProxyEvent) {
   try {
+    // CORS preflight: respond to OPTIONS with 204 and CORS headers
+    if (event.httpMethod === "OPTIONS") {
+      return { statusCode: 204, headers: { ...corsHeaders }, body: "" };
+    }
+
     console.log("Received event:", JSON.stringify(event, null, 2));
     console.log("Environment variables:", {
       PRODUCTS_TABLE: process.env.PRODUCTS_TABLE,
