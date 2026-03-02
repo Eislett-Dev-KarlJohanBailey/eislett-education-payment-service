@@ -228,10 +228,12 @@ module "stripe_service_lambda" {
   source = "../../modules/lambda"
 
   function_name = "${var.project_name}-${var.environment}-stripe-service"
-  handler       = "dist/handler/index.handler"
+  handler       = "index.handler"
   runtime       = "nodejs20.x"
-  filename      = abspath("${path.cwd}/services/stripe-service/function.zip")
+  filename      = abspath("${path.module}/../../../services/stripe-service/function.zip")
   iam_role_arn  = module.stripe_service_iam_role.role_arn
+  timeout       = 30
+  memory_size   = 256
 
   environment_variables = {
     STRIPE_SECRET_KEY              = local.stripe_secret_key
