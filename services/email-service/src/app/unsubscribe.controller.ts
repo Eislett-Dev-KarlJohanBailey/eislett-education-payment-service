@@ -1,26 +1,40 @@
 import type { RequestContext } from "../handler/api-gateway/types";
 import type { UnsubscribesRepository } from "../infrastructure/dynamodb.client";
+import { getJwtEmailSecret } from "../infrastructure/secrets.client";
+import { verifyUnsubscribeToken } from "../infrastructure/jwt-email";
 
 export class UnsubscribeController {
-  constructor(private readonly unsubscribesRepo: UnsubscribesRepository) {}
+  constructor(
+    private readonly unsubscribesRepo: UnsubscribesRepository,
+    private readonly jwtEmailSecretName: string
+  ) {}
 
   async handle(req: RequestContext): Promise<{ ok: boolean; message: string }> {
-    let email: string | undefined;
+    const token =
+      (req.method === "GET"
+        ? req.query?.token ?? req.query?.t
+        : (req.body ?? {})?.token ?? (req.body ?? {})?.t) as string | undefined;
 
-    if (req.method === "GET") {
-      email = req.query?.email ?? req.query?.e;
-    } else {
-      const body = req.body ?? {};
-      email =
-        typeof body.email === "string"
-          ? body.email
-          : typeof body.e === "string"
-            ? body.e
-            : undefined;
+    if (!token?.trim()) {
+      return {
+        ok: false,
+        message: "Missing token (query param 'token' or body.token required)",
+      };
     }
 
-    if (!email?.trim()) {
-      return { ok: false, message: "Missing email (query param 'email' or body.email)" };
+    let secret: string;
+    try {
+      secret = await getJwtEmailSecret(this.jwtEmailSecretName);
+    } catch (e) {
+      console.error("Failed to load JWT email secret:", e);
+      return { ok: false, message: "Service configuration error" };
+    }
+
+    let email: string;
+    try {
+      email = verifyUnsubscribeToken(token.trim(), secret);
+    } catch (e) {
+      return { ok: false, message: "Invalid or expired unsubscribe link" };
     }
 
     await this.unsubscribesRepo.unsubscribe(email);

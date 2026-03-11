@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { sendMail } from "../infrastructure/email.client";
-import { getNoReplySecret } from "../infrastructure/secrets.client";
+import { getNoReplySecret, getJwtEmailSecret } from "../infrastructure/secrets.client";
+import { signUnsubscribeToken } from "../infrastructure/jwt-email";
 import { TemplateService } from "../infrastructure/template.service";
 import type { EmailQueueMessage, NoReplySecret } from "../types";
 import { EmailsSentRepository } from "../infrastructure/dynamodb.client";
@@ -11,7 +12,9 @@ export class SendEmailUseCase {
     private readonly templateService: TemplateService,
     private readonly emailsSentRepo: EmailsSentRepository,
     private readonly unsubscribesRepo: UnsubscribesRepository,
-    private readonly noReplySecretName: string
+    private readonly noReplySecretName: string,
+    private readonly jwtEmailSecretName: string | undefined,
+    private readonly unsubscribeBaseUrl: string | undefined
   ) {}
 
   async execute(
@@ -39,20 +42,35 @@ export class SendEmailUseCase {
 
     const fromAddress = secret.from ?? secret.user;
 
+    let content = message.content ?? {};
+    if (
+      this.jwtEmailSecretName &&
+      this.unsubscribeBaseUrl &&
+      content.unsubscribeUrl == null
+    ) {
+      try {
+        const jwtSecret = await getJwtEmailSecret(this.jwtEmailSecretName);
+        const token = signUnsubscribeToken(to, jwtSecret);
+        content = { ...content, unsubscribeUrl: `${this.unsubscribeBaseUrl}?token=${encodeURIComponent(token)}` };
+      } catch (e) {
+        console.warn("Could not build unsubscribe URL:", e);
+      }
+    }
+
     let html: string | undefined;
-    const text = !message.template && typeof message.content?.message === "string"
-      ? message.content.message
+    const text = !message.template && typeof content?.message === "string"
+      ? (content as { message: string }).message
       : undefined;
 
     if (message.template) {
       try {
-        html = await this.templateService.render(message.template, message.content ?? {});
+        html = await this.templateService.render(message.template, content as Record<string, unknown>);
       } catch (e) {
         const err = e instanceof Error ? e.message : String(e);
         return { success: false, error: `Template: ${err}` };
       }
-    } else if (typeof message.content?.message === "string") {
-      html = message.content.message;
+    } else if (typeof (content as { message?: string }).message === "string") {
+      html = (content as { message: string }).message;
     } else {
       return { success: false, error: "Missing template or content.message" };
     }

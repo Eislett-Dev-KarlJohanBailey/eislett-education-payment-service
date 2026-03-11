@@ -8,8 +8,8 @@ Send a message to the email queue with:
 
 - **template** (optional): S3 key of the HBS file (e.g. `welcome.hbs`). If omitted, the body is taken from `content.message` (plain text/no template).
 - **header**: Subject line.
-- **to**: Recipient email address.
-- **content**: Object passed to the Handlebars template (or `{ message: "..." }` when no template).
+- **to**: Recipient email address (must be the email; no user id or enrichment/lookup).
+- **content**: Object passed to the Handlebars template (or `{ message: "..." }` when no template). If `unsubscribeUrl` is omitted and `UNSUBSCRIBE_BASE_URL` is set, the service injects a signed JWT unsubscribe link.
 
 Example with template:
 
@@ -21,11 +21,11 @@ Example with template:
   "content": {
     "title": "Welcome",
     "message": "Thanks for signing up.",
-    "siteName": "My App",
-    "unsubscribeUrl": "https://api.example.com/v1/email/unsubscribe?email=user@example.com"
+    "siteName": "My App"
   }
 }
 ```
+(If `UNSUBSCRIBE_BASE_URL` is configured, `content.unsubscribeUrl` is set automatically with a signed token.)
 
 Example without template:
 
@@ -89,12 +89,26 @@ Store the value as **plaintext JSON** with these fields:
 }
 ```
 
+## JWT email secret (Secrets Manager)
+
+Used to sign and verify unsubscribe tokens (email + TTL). Create a secret in AWS Secrets Manager:
+
+- **Name:** `{project_name}-{env}-jwt-email-service` (e.g. `eislett-education-dev-jwt-email-service`)
+
+Store the value as a **plain string** (the HMAC key), or as JSON with a `key` or `secret` field. Example JSON:
+
+```json
+{ "key": "your-secret-signing-key-at-least-32-chars" }
+```
+
+The unsubscribe controller verifies the token and reads the email from the payload. The send flow can sign tokens when `JWT_EMAIL_SERVICE_SECRET_NAME` and `UNSUBSCRIBE_BASE_URL` are set.
+
 ## Unsubscribe API
 
-- **GET** `/v1/email/unsubscribe?email=user@example.com`
-- **POST** `/v1/email/unsubscribe` with body `{ "email": "user@example.com" }`
+- **GET** `/v1/email/unsubscribe?token=<jwt>`
+- **POST** `/v1/email/unsubscribe` with body `{ "token": "<jwt>" }`
 
-No auth. Stores the address in the unsubscribes table; the queue processor skips sending to any address in that table.
+The `token` is a JWT signed with the jwt-email-service secret, containing the subscriber email and a TTL (default 30 days). The controller verifies the token and unsubscribes the email from the payload. No raw email in the URL.
 
 ## Build and package
 
