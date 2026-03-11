@@ -9,10 +9,11 @@ export function bootstrap() {
   const unsubscribesTable = process.env.UNSUBSCRIBES_TABLE;
   const templatesBucket = process.env.TEMPLATES_BUCKET;
   const noReplySecretName = process.env.NO_REPLY_SECRET_NAME;
+  const jwtEmailSecretName = process.env.JWT_EMAIL_SERVICE_SECRET_NAME;
 
-  if (!emailsSentTable || !unsubscribesTable || !templatesBucket || !noReplySecretName) {
+  if (!emailsSentTable || !unsubscribesTable || !templatesBucket || !noReplySecretName || !jwtEmailSecretName) {
     throw new Error(
-      "Missing env: EMAILS_SENT_TABLE, UNSUBSCRIBES_TABLE, TEMPLATES_BUCKET, NO_REPLY_SECRET_NAME"
+      "Missing env: EMAILS_SENT_TABLE, UNSUBSCRIBES_TABLE, TEMPLATES_BUCKET, NO_REPLY_SECRET_NAME, JWT_EMAIL_SERVICE_SECRET_NAME"
     );
   }
 
@@ -25,10 +26,12 @@ export function bootstrap() {
     templateService,
     emailsSentRepo,
     unsubscribesRepo,
-    noReplySecretName
+    noReplySecretName,
+    process.env.JWT_EMAIL_SERVICE_SECRET_NAME,
+    process.env.UNSUBSCRIBE_BASE_URL
   );
 
-  const unsubscribeController = new UnsubscribeController(unsubscribesRepo);
+  const unsubscribeController = new UnsubscribeController(unsubscribesRepo, jwtEmailSecretName);
 
   return {
     sendEmailUseCase,

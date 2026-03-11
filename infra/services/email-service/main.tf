@@ -40,6 +40,11 @@ data "aws_secretsmanager_secret" "no_reply_email" {
   name = "${var.project_name}-${var.environment}-no-reply-email"
 }
 
+# Secrets Manager: JWT secret for email unsubscribe tokens (email + TTL)
+data "aws_secretsmanager_secret" "jwt_email_service" {
+  name = "${var.project_name}-${var.environment}-jwt-email-service"
+}
+
 # ---------------------------------------------------------------------------
 # DynamoDB: emails sent (audit)
 # ---------------------------------------------------------------------------
@@ -250,7 +255,10 @@ resource "aws_iam_role_policy" "secrets_manager" {
         Action = [
           "secretsmanager:GetSecretValue"
         ]
-        Resource = data.aws_secretsmanager_secret.no_reply_email.arn
+        Resource = [
+          data.aws_secretsmanager_secret.no_reply_email.arn,
+          data.aws_secretsmanager_secret.jwt_email_service.arn
+        ]
       }
     ]
   })
@@ -270,12 +278,13 @@ module "email_service_lambda" {
   timeout       = 120
   memory_size   = 256
 
-  environment_variables = {
-    EMAILS_SENT_TABLE    = aws_dynamodb_table.emails_sent.name
-    UNSUBSCRIBES_TABLE   = aws_dynamodb_table.unsubscribes.name
-    TEMPLATES_BUCKET     = aws_s3_bucket.templates.id
-    NO_REPLY_SECRET_NAME = data.aws_secretsmanager_secret.no_reply_email.name
-  }
+  environment_variables = merge({
+    EMAILS_SENT_TABLE             = aws_dynamodb_table.emails_sent.name
+    UNSUBSCRIBES_TABLE            = aws_dynamodb_table.unsubscribes.name
+    TEMPLATES_BUCKET              = aws_s3_bucket.templates.id
+    NO_REPLY_SECRET_NAME          = data.aws_secretsmanager_secret.no_reply_email.name
+    JWT_EMAIL_SERVICE_SECRET_NAME = data.aws_secretsmanager_secret.jwt_email_service.name
+  }, var.unsubscribe_base_url != "" ? { UNSUBSCRIBE_BASE_URL = var.unsubscribe_base_url } : {})
 }
 
 resource "aws_lambda_event_source_mapping" "email_queue_mapping" {
@@ -299,10 +308,11 @@ module "email_api_lambda" {
   iam_role_arn  = module.email_service_iam_role.role_arn
 
   environment_variables = {
-    EMAILS_SENT_TABLE    = aws_dynamodb_table.emails_sent.name
-    UNSUBSCRIBES_TABLE   = aws_dynamodb_table.unsubscribes.name
-    TEMPLATES_BUCKET     = aws_s3_bucket.templates.id
-    NO_REPLY_SECRET_NAME = data.aws_secretsmanager_secret.no_reply_email.name
+    EMAILS_SENT_TABLE            = aws_dynamodb_table.emails_sent.name
+    UNSUBSCRIBES_TABLE           = aws_dynamodb_table.unsubscribes.name
+    TEMPLATES_BUCKET             = aws_s3_bucket.templates.id
+    NO_REPLY_SECRET_NAME         = data.aws_secretsmanager_secret.no_reply_email.name
+    JWT_EMAIL_SERVICE_SECRET_NAME = data.aws_secretsmanager_secret.jwt_email_service.name
   }
 }
 

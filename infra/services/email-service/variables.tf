@@ -20,3 +20,9 @@ variable "project_name" {
   description = "Project name prefix for resource naming (e.g. eislett-education)"
   default     = "eislett-education"
 }
+
+variable "unsubscribe_base_url" {
+  type        = string
+  description = "Base URL for unsubscribe links (e.g. https://api.example.com/v1/email/unsubscribe). If set, send flow injects content.unsubscribeUrl with a signed token."
+  default     = ""
+}
