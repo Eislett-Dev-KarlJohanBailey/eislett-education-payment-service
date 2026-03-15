@@ -12,7 +12,16 @@ import {
   ScanCommand,
   DeleteCommand,
 } from "@aws-sdk/lib-dynamodb";
-import { SNSClient, CreateTopicCommand } from "@aws-sdk/client-sns";
+import { SNSClient, CreateTopicCommand, SubscribeCommand } from "@aws-sdk/client-sns";
+import {
+  SQSClient,
+  CreateQueueCommand,
+  GetQueueAttributesCommand,
+  SetQueueAttributesCommand,
+  ReceiveMessageCommand,
+  DeleteMessageCommand,
+  GetQueueUrlCommand,
+} from "@aws-sdk/client-sqs";
 
 const ENDPOINT = process.env.LOCALSTACK_ENDPOINT || "http://localhost:4566";
 const REGION = "us-east-1";
@@ -215,8 +224,97 @@ export async function createSnsTopic(name: string): Promise<string> {
   return result.TopicArn!;
 }
 
+export function sqsClient() {
+  return new SQSClient(clientConfig());
+}
+
+/**
+ * Create an SQS queue and subscribe it to an SNS topic so we can receive published messages in e2e tests.
+ * Returns the queue URL. Call receiveEntitlementUpdateFromQueue(queueUrl) to poll for messages.
+ */
+export async function createQueueSubscribedToSns(
+  queueName: string,
+  topicArn: string
+): Promise<string> {
+  const sqs = sqsClient();
+  const { QueueUrl } = await sqs.send(
+    new CreateQueueCommand({ QueueName: queueName })
+  );
+  if (!QueueUrl) throw new Error("CreateQueue did not return QueueUrl");
+
+  const { Attributes } = await sqs.send(
+    new GetQueueAttributesCommand({
+      QueueUrl,
+      AttributeNames: ["QueueArn"],
+    })
+  );
+  const queueArn = Attributes?.QueueArn;
+  if (!queueArn) throw new Error("QueueArn not found");
+
+  const policy = {
+    Version: "2012-10-17",
+    Statement: [
+      {
+        Effect: "Allow",
+        Principal: { Service: "sns.amazonaws.com" },
+        Action: "sqs:SendMessage",
+        Resource: queueArn,
+        Condition: { ArnEquals: { "aws:SourceArn": topicArn } },
+      },
+    ],
+  };
+  await sqs.send(
+    new SetQueueAttributesCommand({
+      QueueUrl,
+      Attributes: { Policy: JSON.stringify(policy) },
+    })
+  );
+
+  await snsClient().send(
+    new SubscribeCommand({
+      TopicArn: topicArn,
+      Protocol: "sqs",
+      Endpoint: queueArn,
+    })
+  );
+
+  return QueueUrl;
+}
+
+/**
+ * Receive one message from the queue (long poll 5s). Returns parsed body or null.
+ * When the queue is subscribed to SNS, the SQS Body is an SNS envelope with our payload in Message (string);
+ * we unwrap so body is the actual published event.
+ */
+export async function receiveOneMessageFromQueue<T = unknown>(
+  queueUrl: string
+): Promise<{ body: T; receiptHandle: string } | null> {
+  const sqs = sqsClient();
+  const result = await sqs.send(
+    new ReceiveMessageCommand({
+      QueueUrl: queueUrl,
+      MaxNumberOfMessages: 1,
+      WaitTimeSeconds: 5,
+      AttributeNames: ["All"],
+    })
+  );
+  const msg = result.Messages?.[0];
+  if (!msg?.Body) return null;
+  const parsed = JSON.parse(msg.Body) as Record<string, unknown>;
+  // SNS->SQS: envelope has Message (string) containing our JSON
+  const body =
+    typeof parsed.Message === "string"
+      ? (JSON.parse(parsed.Message as string) as T)
+      : (parsed as T);
+  return {
+    body,
+    receiptHandle: msg.ReceiptHandle!,
+  };
+}
+
 export function setTestEnvVars(overrides: {
   billingEventsTopicArn?: string;
+  entitlementUpdatesTopicArn?: string;
 } = {}): void {
   process.env.PRODUCTS_TABLE = "products-test";
   process.env.PRICES_TABLE = "prices-test";
@@ -228,6 +326,9 @@ export function setTestEnvVars(overrides: {
   process.env.BILLING_EVENTS_TOPIC_ARN =
     overrides.billingEventsTopicArn ??
     "arn:aws:sns:us-east-1:000000000000:billing-events-test";
+  process.env.ENTITLEMENT_UPDATES_TOPIC_ARN =
+    overrides.entitlementUpdatesTopicArn ??
+    "arn:aws:sns:us-east-1:000000000000:entitlement-updates-test";
   process.env.ENVIRONMENT = "test";
   process.env.AWS_REGION = "us-east-1";
   process.env.NODE_ENV = "test";

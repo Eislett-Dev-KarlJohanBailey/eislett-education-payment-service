@@ -32,6 +32,7 @@ export * from "./entitlements/domain/value-objects/entitlement-status.vo";
 export * from "./entitlements/domain/entities/entitlement-usage.entity";
 export * from "./entitlements/domain/registry/entitlement.registry";
 export * from "./entitlements/app/ports/entitlement.repository";
+export * from "./entitlements/app/ports/entitlement-update-notifier.port";
 export * from "./entitlements/app/usecases/create.entitlement.usecase";
 export * from "./entitlements/app/usecases/update.entitlement.usecase";
 export * from "./entitlements/app/usecases/get.user.entitlements.usecase";

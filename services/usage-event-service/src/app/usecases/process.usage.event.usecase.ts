@@ -1,8 +1,11 @@
-import { EntitlementRepository } from "@libs/domain";
+import { EntitlementRepository, type EntitlementUpdateNotifier } from "@libs/domain";
 import { UsageDomainEvent } from "@libs/domain";
 
 export class ProcessUsageEventUseCase {
-  constructor(private readonly entitlementRepo: EntitlementRepository) {}
+  constructor(
+    private readonly entitlementRepo: EntitlementRepository,
+    private readonly entitlementUpdateNotifier?: EntitlementUpdateNotifier
+  ) {}
 
   async execute(event: UsageDomainEvent): Promise<void> {
     const { userId, entitlementKey, amount } = event;
@@ -34,10 +37,12 @@ export class ProcessUsageEventUseCase {
     if (entitlement.usage.shouldReset()) {
       entitlement.usage.reset();
       await this.entitlementRepo.update(entitlement);
+      await this.entitlementUpdateNotifier?.notify(entitlement);
     }
 
     entitlement.usage.consume(amount);
     await this.entitlementRepo.update(entitlement);
+    await this.entitlementUpdateNotifier?.notify(entitlement);
 
     console.log(
       `Recorded usage: ${amount} for ${entitlementKey} (user: ${userId}), used: ${entitlement.usage.used}/${entitlement.usage.getEffectiveLimit()}`

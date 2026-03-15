@@ -5,6 +5,7 @@ import {
   SyncProductLimitsToEntitlementsUseCase,
   ProductRepositoryPorts,
   DynamoDunningRepository,
+  type EntitlementUpdateNotifier,
 } from "@libs/domain";
 import { ProcessBillingEventUseCase } from "./app/usecases/process.billing.event.usecase";
 import { EntitlementEventPublisher } from "./infrastructure/event.publisher";
@@ -29,8 +30,15 @@ export function bootstrap() {
   const productRepo = new DynamoProductRepository();
   const entitlementRepo = new DynamoEntitlementRepository(entitlementsTableName);
   const createEntitlementUseCase = new CreateEntitlementUseCase(entitlementRepo);
-  const syncProductLimitsUseCase = new SyncProductLimitsToEntitlementsUseCase(productRepo, entitlementRepo);
   const eventPublisher = new EntitlementEventPublisher();
+  const entitlementUpdateNotifier: EntitlementUpdateNotifier = {
+    notify: (e) => eventPublisher.publishAvailabilityFromEntitlement(e),
+  };
+  const syncProductLimitsUseCase = new SyncProductLimitsToEntitlementsUseCase(
+    productRepo,
+    entitlementRepo,
+    entitlementUpdateNotifier
+  );
   const processedPaymentsRepo = new DynamoProcessedPaymentsRepository(processedEventsTableName);
 
   // Dunning repository is optional - only used to check state before revoking
