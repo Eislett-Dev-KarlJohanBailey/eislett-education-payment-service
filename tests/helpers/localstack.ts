@@ -20,7 +20,6 @@ import {
   SetQueueAttributesCommand,
   ReceiveMessageCommand,
   DeleteMessageCommand,
-  GetQueueUrlCommand,
 } from "@aws-sdk/client-sqs";
 
 const ENDPOINT = process.env.LOCALSTACK_ENDPOINT || "http://localhost:4566";
@@ -46,6 +45,10 @@ export function docClient() {
 
 export function snsClient() {
   return new SNSClient(clientConfig());
+}
+
+export function sqsClient() {
+  return new SQSClient(clientConfig());
 }
 
 interface TableDef {
@@ -224,32 +227,28 @@ export async function createSnsTopic(name: string): Promise<string> {
   return result.TopicArn!;
 }
 
-export function sqsClient() {
-  return new SQSClient(clientConfig());
-}
-
 /**
- * Create an SQS queue and subscribe it to an SNS topic so we can receive published messages in e2e tests.
- * Returns the queue URL. Call receiveEntitlementUpdateFromQueue(queueUrl) to poll for messages.
+ * Create an SQS queue and subscribe it to an SNS topic (for e2e tests).
+ * Returns the queue URL.
  */
 export async function createQueueSubscribedToSns(
   queueName: string,
   topicArn: string
 ): Promise<string> {
   const sqs = sqsClient();
-  const { QueueUrl } = await sqs.send(
+  const createResult = await sqs.send(
     new CreateQueueCommand({ QueueName: queueName })
   );
-  if (!QueueUrl) throw new Error("CreateQueue did not return QueueUrl");
+  const queueUrl = createResult.QueueUrl!;
 
-  const { Attributes } = await sqs.send(
+  const attrs = await sqs.send(
     new GetQueueAttributesCommand({
-      QueueUrl,
+      QueueUrl: queueUrl,
       AttributeNames: ["QueueArn"],
     })
   );
-  const queueArn = Attributes?.QueueArn;
-  if (!queueArn) throw new Error("QueueArn not found");
+  const queueArn = attrs.Attributes?.QueueArn;
+  if (!queueArn) throw new Error("Failed to get queue ARN");
 
   const policy = {
     Version: "2012-10-17",
@@ -265,12 +264,13 @@ export async function createQueueSubscribedToSns(
   };
   await sqs.send(
     new SetQueueAttributesCommand({
-      QueueUrl,
+      QueueUrl: queueUrl,
       Attributes: { Policy: JSON.stringify(policy) },
     })
   );
 
-  await snsClient().send(
+  const sns = snsClient();
+  await sns.send(
     new SubscribeCommand({
       TopicArn: topicArn,
       Protocol: "sqs",
@@ -278,43 +278,57 @@ export async function createQueueSubscribedToSns(
     })
   );
 
-  return QueueUrl;
+  return queueUrl;
 }
 
-/**
- * Receive one message from the queue (long poll 5s). Returns parsed body or null.
- * When the queue is subscribed to SNS, the SQS Body is an SNS envelope with our payload in Message (string);
- * we unwrap so body is the actual published event.
- */
+/** Poll the queue for one message (SNS-wrapped), unwrap and return body; null if none within timeoutMs. */
 export async function receiveOneMessageFromQueue<T = unknown>(
-  queueUrl: string
-): Promise<{ body: T; receiptHandle: string } | null> {
+  queueUrl: string,
+  timeoutMs: number = 15000
+): Promise<{ body: T } | null> {
   const sqs = sqsClient();
-  const result = await sqs.send(
-    new ReceiveMessageCommand({
-      QueueUrl: queueUrl,
-      MaxNumberOfMessages: 1,
-      WaitTimeSeconds: 5,
-      AttributeNames: ["All"],
-    })
-  );
-  const msg = result.Messages?.[0];
-  if (!msg?.Body) return null;
-  const parsed = JSON.parse(msg.Body) as Record<string, unknown>;
-  // SNS->SQS: envelope has Message (string) containing our JSON
-  const body =
-    typeof parsed.Message === "string"
-      ? (JSON.parse(parsed.Message as string) as T)
-      : (parsed as T);
-  return {
-    body,
-    receiptHandle: msg.ReceiptHandle!,
-  };
+  const deadline = Date.now() + timeoutMs;
+  const waitSeconds = 5;
+
+  while (Date.now() < deadline) {
+    const result = await sqs.send(
+      new ReceiveMessageCommand({
+        QueueUrl: queueUrl,
+        MaxNumberOfMessages: 1,
+        WaitTimeSeconds: Math.min(waitSeconds, 20),
+        VisibilityTimeout: 30,
+      })
+    );
+
+    const messages = result.Messages ?? [];
+    if (messages.length === 0) continue;
+
+    const msg = messages[0];
+    await sqs.send(
+      new DeleteMessageCommand({
+        QueueUrl: queueUrl,
+        ReceiptHandle: msg.ReceiptHandle!,
+      })
+    );
+
+    let body: T;
+    try {
+      const raw = JSON.parse(msg.Body ?? "{}");
+      if (raw.Type === "Notification" && raw.Message != null) {
+        body = JSON.parse(raw.Message) as T;
+      } else {
+        body = raw as T;
+      }
+    } catch {
+      body = msg.Body as unknown as T;
+    }
+    return { body };
+  }
+  return null;
 }
 
 export function setTestEnvVars(overrides: {
   billingEventsTopicArn?: string;
-  entitlementUpdatesTopicArn?: string;
 } = {}): void {
   process.env.PRODUCTS_TABLE = "products-test";
   process.env.PRICES_TABLE = "prices-test";
@@ -326,9 +340,6 @@ export function setTestEnvVars(overrides: {
   process.env.BILLING_EVENTS_TOPIC_ARN =
     overrides.billingEventsTopicArn ??
     "arn:aws:sns:us-east-1:000000000000:billing-events-test";
-  process.env.ENTITLEMENT_UPDATES_TOPIC_ARN =
-    overrides.entitlementUpdatesTopicArn ??
-    "arn:aws:sns:us-east-1:000000000000:entitlement-updates-test";
   process.env.ENVIRONMENT = "test";
   process.env.AWS_REGION = "us-east-1";
   process.env.NODE_ENV = "test";
