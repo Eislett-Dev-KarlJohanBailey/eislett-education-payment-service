@@ -1,5 +1,6 @@
-import { DynamoEntitlementRepository } from "@libs/domain";
+import { DynamoEntitlementRepository, type EntitlementUpdateNotifier } from "@libs/domain";
 import { ProcessUsageEventUseCase } from "./app/usecases/process.usage.event.usecase";
+import { EntitlementUpdatesPublisher } from "./infrastructure/entitlement-updates.publisher";
 
 export function bootstrap() {
   const entitlementsTableName = process.env.ENTITLEMENTS_TABLE;
@@ -10,11 +11,14 @@ export function bootstrap() {
     );
   }
 
-  const entitlementRepo = new DynamoEntitlementRepository(
-    entitlementsTableName
-  );
+  const entitlementRepo = new DynamoEntitlementRepository(entitlementsTableName);
+  const entitlementUpdatesPublisher = new EntitlementUpdatesPublisher();
+  const entitlementUpdateNotifier: EntitlementUpdateNotifier = {
+    notify: (e) => entitlementUpdatesPublisher.publishFromEntitlement(e),
+  };
   const processUsageEventUseCase = new ProcessUsageEventUseCase(
-    entitlementRepo
+    entitlementRepo,
+    entitlementUpdateNotifier
   );
 
   return {

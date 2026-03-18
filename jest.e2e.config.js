@@ -8,6 +8,7 @@ module.exports = {
   moduleFileExtensions: ["ts", "js", "json"],
   clearMocks: true,
   setupFiles: ["<rootDir>/tests/setup/localstack.setup.ts"],
+  setupFilesAfterEnv: ["<rootDir>/tests/setup/mock-console.ts"],
   testTimeout: 60000,
   transform: {
     "^.+\\.ts$": ["ts-jest", { tsconfig: "tsconfig.base.json" }],

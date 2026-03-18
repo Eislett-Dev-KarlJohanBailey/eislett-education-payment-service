@@ -12,7 +12,15 @@ import {
   ScanCommand,
   DeleteCommand,
 } from "@aws-sdk/lib-dynamodb";
-import { SNSClient, CreateTopicCommand } from "@aws-sdk/client-sns";
+import { SNSClient, CreateTopicCommand, SubscribeCommand } from "@aws-sdk/client-sns";
+import {
+  SQSClient,
+  CreateQueueCommand,
+  GetQueueAttributesCommand,
+  SetQueueAttributesCommand,
+  ReceiveMessageCommand,
+  DeleteMessageCommand,
+} from "@aws-sdk/client-sqs";
 
 const ENDPOINT = process.env.LOCALSTACK_ENDPOINT || "http://localhost:4566";
 const REGION = "us-east-1";
@@ -37,6 +45,10 @@ export function docClient() {
 
 export function snsClient() {
   return new SNSClient(clientConfig());
+}
+
+export function sqsClient() {
+  return new SQSClient(clientConfig());
 }
 
 interface TableDef {
@@ -213,6 +225,106 @@ export async function createSnsTopic(name: string): Promise<string> {
   const sns = snsClient();
   const result = await sns.send(new CreateTopicCommand({ Name: name }));
   return result.TopicArn!;
+}
+
+/**
+ * Create an SQS queue and subscribe it to an SNS topic (for e2e tests).
+ * Returns the queue URL.
+ */
+export async function createQueueSubscribedToSns(
+  queueName: string,
+  topicArn: string
+): Promise<string> {
+  const sqs = sqsClient();
+  const createResult = await sqs.send(
+    new CreateQueueCommand({ QueueName: queueName })
+  );
+  const queueUrl = createResult.QueueUrl!;
+
+  const attrs = await sqs.send(
+    new GetQueueAttributesCommand({
+      QueueUrl: queueUrl,
+      AttributeNames: ["QueueArn"],
+    })
+  );
+  const queueArn = attrs.Attributes?.QueueArn;
+  if (!queueArn) throw new Error("Failed to get queue ARN");
+
+  const policy = {
+    Version: "2012-10-17",
+    Statement: [
+      {
+        Effect: "Allow",
+        Principal: { Service: "sns.amazonaws.com" },
+        Action: "sqs:SendMessage",
+        Resource: queueArn,
+        Condition: { ArnEquals: { "aws:SourceArn": topicArn } },
+      },
+    ],
+  };
+  await sqs.send(
+    new SetQueueAttributesCommand({
+      QueueUrl: queueUrl,
+      Attributes: { Policy: JSON.stringify(policy) },
+    })
+  );
+
+  const sns = snsClient();
+  await sns.send(
+    new SubscribeCommand({
+      TopicArn: topicArn,
+      Protocol: "sqs",
+      Endpoint: queueArn,
+    })
+  );
+
+  return queueUrl;
+}
+
+/** Poll the queue for one message (SNS-wrapped), unwrap and return body; null if none within timeoutMs. */
+export async function receiveOneMessageFromQueue<T = unknown>(
+  queueUrl: string,
+  timeoutMs: number = 15000
+): Promise<{ body: T } | null> {
+  const sqs = sqsClient();
+  const deadline = Date.now() + timeoutMs;
+  const waitSeconds = 5;
+
+  while (Date.now() < deadline) {
+    const result = await sqs.send(
+      new ReceiveMessageCommand({
+        QueueUrl: queueUrl,
+        MaxNumberOfMessages: 1,
+        WaitTimeSeconds: Math.min(waitSeconds, 20),
+        VisibilityTimeout: 30,
+      })
+    );
+
+    const messages = result.Messages ?? [];
+    if (messages.length === 0) continue;
+
+    const msg = messages[0];
+    await sqs.send(
+      new DeleteMessageCommand({
+        QueueUrl: queueUrl,
+        ReceiptHandle: msg.ReceiptHandle!,
+      })
+    );
+
+    let body: T;
+    try {
+      const raw = JSON.parse(msg.Body ?? "{}");
+      if (raw.Type === "Notification" && raw.Message != null) {
+        body = JSON.parse(raw.Message) as T;
+      } else {
+        body = raw as T;
+      }
+    } catch {
+      body = msg.Body as unknown as T;
+    }
+    return { body };
+  }
+  return null;
 }
 
 export function setTestEnvVars(overrides: {

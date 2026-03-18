@@ -346,6 +346,7 @@ export class ProcessBillingEventUseCase {
         }
         
         await this.entitlementRepo.update(existing);
+        await this.eventPublisher.publishAvailabilityFromEntitlement(existing);
       } else {
         // Create new entitlement
         // For one-time payments: no expiration (lifetime access)
@@ -465,6 +466,7 @@ export class ProcessBillingEventUseCase {
         }
         
         await this.entitlementRepo.update(existing);
+        await this.eventPublisher.publishAvailabilityFromEntitlement(existing);
       }
     }
 
@@ -616,6 +618,7 @@ export class ProcessBillingEventUseCase {
           // Limits remain until expiration
         }
         await this.entitlementRepo.update(entitlement);
+        await this.eventPublisher.publishAvailabilityFromEntitlement(entitlement);
       }
     }
 

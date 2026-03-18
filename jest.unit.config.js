@@ -7,6 +7,7 @@ module.exports = {
   testMatch: ["**/*.test.ts"],
   moduleFileExtensions: ["ts", "js", "json"],
   clearMocks: true,
+  setupFilesAfterEnv: ["<rootDir>/tests/setup/mock-console.ts"],
   transform: {
     "^.+\\.ts$": ["ts-jest", { tsconfig: "tsconfig.base.json" }],
   },
