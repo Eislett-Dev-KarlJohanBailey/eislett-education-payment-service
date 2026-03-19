@@ -86,3 +86,7 @@ export * from "./transactions/index";
 // Usage events (entitlement consumption)
 
 export * from "./usage-events/index";
+
+// Product purchase intent
+
+export * from "./product-purchase-intent/index";

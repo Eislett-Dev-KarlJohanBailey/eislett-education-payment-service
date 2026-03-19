@@ -156,6 +156,25 @@ const PAYMENT_TABLES: TableDef[] = [
       { AttributeName: "SK", AttributeType: "S" },
     ],
   },
+  {
+    TableName: "product-purchase-intent-test",
+    KeySchema: [{ AttributeName: "id", KeyType: "HASH" }],
+    AttributeDefinitions: [
+      { AttributeName: "id", AttributeType: "S" },
+      { AttributeName: "GSI1PK", AttributeType: "S" },
+      { AttributeName: "GSI1SK", AttributeType: "S" },
+    ],
+    GlobalSecondaryIndexes: [
+      {
+        IndexName: "GSI1",
+        KeySchema: [
+          { AttributeName: "GSI1PK", KeyType: "HASH" },
+          { AttributeName: "GSI1SK", KeyType: "RANGE" },
+        ],
+        Projection: { ProjectionType: "ALL" },
+      },
+    ],
+  },
 ];
 
 export async function createAllTables(): Promise<void> {
@@ -337,6 +356,7 @@ export function setTestEnvVars(overrides: {
   process.env.TRANSACTIONS_TABLE = "transactions-test";
   process.env.TRIALS_TABLE = "trials-test";
   process.env.PROCESSED_EVENTS_TABLE = "processed-events-test";
+  process.env.PRODUCT_PURCHASE_INTENT_TABLE = "product-purchase-intent-test";
   process.env.BILLING_EVENTS_TOPIC_ARN =
     overrides.billingEventsTopicArn ??
     "arn:aws:sns:us-east-1:000000000000:billing-events-test";
@@ -353,4 +373,5 @@ export const TABLE_NAMES = {
   transactions: "transactions-test",
   trials: "trials-test",
   processedEvents: "processed-events-test",
+  productPurchaseIntent: "product-purchase-intent-test",
 };
