@@ -59,6 +59,9 @@ locals {
 }
 
 # SNS Topic for Entitlement Updates (usage/availability changes). Consumed by downstream subscribers.
+# If this topic already exists in AWS (e.g. created by another stack or manually), import it instead of creating:
+#   terraform import aws_sns_topic.entitlement_updates arn:aws:sns:REGION:ACCOUNT_ID:TOPIC_NAME
+#   e.g. terraform import aws_sns_topic.entitlement_updates arn:aws:sns:us-east-1:123456789012:eislett-education-dev-entitlement-updates
 resource "aws_sns_topic" "entitlement_updates" {
   name = "${var.project_name}-${var.environment}-entitlement-updates"
 
