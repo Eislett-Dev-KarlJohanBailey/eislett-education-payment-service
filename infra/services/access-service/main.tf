@@ -59,21 +59,11 @@ locals {
 }
 
 # SNS Topic for Entitlement Updates (usage/availability changes). Consumed by downstream subscribers.
-# If this topic already exists in AWS (e.g. created by another stack or manually), import it instead of creating:
-#   terraform import aws_sns_topic.entitlement_updates arn:aws:sns:REGION:ACCOUNT_ID:TOPIC_NAME
-#   e.g. terraform import aws_sns_topic.entitlement_updates arn:aws:sns:us-east-1:123456789012:eislett-education-dev-entitlement-updates
-resource "aws_sns_topic" "entitlement_updates" {
+# Use a data source so we reference the existing topic (avoids "Topic already exists with different tags" when
+# the topic was created elsewhere or with different tags). Create the topic once per environment if missing:
+#   aws sns create-topic --name eislett-education-dev-entitlement-updates
+data "aws_sns_topic" "entitlement_updates" {
   name = "${var.project_name}-${var.environment}-entitlement-updates"
-
-  tags = {
-    Environment = var.environment
-    Service     = "access-service"
-    Name        = "Entitlement Updates Topic"
-  }
-
-  lifecycle {
-    ignore_changes = [tags]
-  }
 }
 
 # DynamoDB Table for Entitlements
@@ -130,7 +120,7 @@ resource "aws_iam_role_policy" "sns_entitlement_updates" {
         Action = [
           "sns:Publish"
         ]
-        Resource = aws_sns_topic.entitlement_updates.arn
+        Resource = data.aws_sns_topic.entitlement_updates.arn
       }
     ]
   })
@@ -168,7 +158,7 @@ module "access_service_lambda" {
 
   environment_variables = {
     ENTITLEMENTS_TABLE           = aws_dynamodb_table.entitlements.name
-    ENTITLEMENT_UPDATES_TOPIC_ARN = aws_sns_topic.entitlement_updates.arn
+    ENTITLEMENT_UPDATES_TOPIC_ARN = data.aws_sns_topic.entitlement_updates.arn
     JWT_ACCESS_TOKEN_SECRET      = local.jwt_access_token_secret
     ENVIRONMENT                  = var.environment
   }
