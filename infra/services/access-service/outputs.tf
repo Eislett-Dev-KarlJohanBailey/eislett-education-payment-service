@@ -1,10 +1,10 @@
 output "entitlement_updates_topic_arn" {
-  value       = data.aws_sns_topic.entitlement_updates.arn
+  value       = aws_sns_topic.entitlement_updates.arn
   description = "ARN of the entitlement updates SNS topic (usage/availability changes)"
 }
 
 output "entitlement_updates_topic_name" {
-  value       = data.aws_sns_topic.entitlement_updates.name
+  value       = aws_sns_topic.entitlement_updates.name
   description = "Name of the entitlement updates SNS topic"
 }
 

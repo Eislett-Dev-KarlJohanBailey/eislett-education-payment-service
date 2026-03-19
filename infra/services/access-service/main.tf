@@ -59,11 +59,14 @@ locals {
 }
 
 # SNS Topic for Entitlement Updates (usage/availability changes). Consumed by downstream subscribers.
-# Use a data source so we reference the existing topic (avoids "Topic already exists with different tags" when
-# the topic was created elsewhere or with different tags). Create the topic once per environment if missing:
-#   aws sns create-topic --name eislett-education-dev-entitlement-updates
-data "aws_sns_topic" "entitlement_updates" {
-  name = "${var.project_name}-${var.environment}-entitlement-updates"
+resource "aws_sns_topic" "entitlement_updates" {
+  name = "${var.project_name}-${var.environment}-entitlement-updates-topic"
+
+  tags = {
+    Environment = var.environment
+    Service     = "access-service"
+    Name        = "Entitlement Updates Topic"
+  }
 }
 
 # DynamoDB Table for Entitlements
@@ -120,7 +123,7 @@ resource "aws_iam_role_policy" "sns_entitlement_updates" {
         Action = [
           "sns:Publish"
         ]
-        Resource = data.aws_sns_topic.entitlement_updates.arn
+        Resource = aws_sns_topic.entitlement_updates.arn
       }
     ]
   })
@@ -158,7 +161,7 @@ module "access_service_lambda" {
 
   environment_variables = {
     ENTITLEMENTS_TABLE           = aws_dynamodb_table.entitlements.name
-    ENTITLEMENT_UPDATES_TOPIC_ARN = data.aws_sns_topic.entitlement_updates.arn
+    ENTITLEMENT_UPDATES_TOPIC_ARN = aws_sns_topic.entitlement_updates.arn
     JWT_ACCESS_TOKEN_SECRET      = local.jwt_access_token_secret
     ENVIRONMENT                  = var.environment
   }
