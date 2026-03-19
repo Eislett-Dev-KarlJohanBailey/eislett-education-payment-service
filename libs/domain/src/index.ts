@@ -11,6 +11,7 @@ export * from "./pricing/domain/errors/domain.error";
 
 export * from "./pricing/domain/value-objects/billing-type.vo";
 export * from "./pricing/domain/value-objects/interval.vo";
+export * from "./pricing/domain/value-objects/allowed-currencies";
 
 export * from "./pricing/app/ports/price.repository.port";
 export * from "./pricing/dynamodb/price.mapper";
@@ -22,6 +23,7 @@ export * from "./pricing/app/mappers/price.mapper";
 export * from "./utils/auth/jwt.utils";
 export * from "./utils/auth/jwt.types";
 export * from "./utils/auth/errors/authentication.error";
+export * from "./utils/auth/errors/forbidden.error";
 
 // Entitlements
 

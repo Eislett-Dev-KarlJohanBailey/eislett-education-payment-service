@@ -586,41 +586,28 @@ describe("Product Service E2E", () => {
       isActive: true,
     };
 
-    it("returns 403 Forbidden when JWT role is not admin or administrator", async () => {
-      const token = createJwtWithRole("learner");
-      const event = createApiGatewayEvent({
-        httpMethod: "POST",
-        path: "/products",
-        resource: "/products",
-        body: JSON.stringify(createPayload),
-        headers: {
-          ...createApiGatewayEvent().headers,
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    const forbiddenRoles = ["learner", "teacher", "educator", "support", "random-role", "ADMINISTRATORX", ""];
 
-      const result = await handler(event);
+    it.each(forbiddenRoles)(
+      "returns 403 Forbidden when JWT role '%s' is not admin/administrator",
+      async (role) => {
+        const token = createJwtWithRole(role);
+        const event = createApiGatewayEvent({
+          httpMethod: "POST",
+          path: "/products",
+          resource: "/products",
+          body: JSON.stringify(createPayload),
+          headers: {
+            ...createApiGatewayEvent().headers,
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-      expect(result.statusCode).toBe(403);
-    });
+        const result = await handler(event);
 
-    it("returns 403 Forbidden when JWT has no role", async () => {
-      const token = createJwtWithRole(""); // or a token with no role claim
-      const event = createApiGatewayEvent({
-        httpMethod: "POST",
-        path: "/products",
-        resource: "/products",
-        body: JSON.stringify(createPayload),
-        headers: {
-          ...createApiGatewayEvent().headers,
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const result = await handler(event);
-
-      expect(result.statusCode).toBe(403);
-    });
+        expect(result.statusCode).toBe(403);
+      }
+    );
 
     it("returns 201 and correct product when JWT role is admin", async () => {
       const token = createJwtWithRole("admin");
