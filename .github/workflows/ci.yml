@@ -13,11 +13,12 @@ jobs:
 
     services:
       localstack:
-        image: localstack/localstack:latest
+        # Pinned with docker-compose.test.yml / eislett-education-api-learner (avoid :latest flakes).
+        image: localstack/localstack:3.7.2
         ports:
           - 4566:4566
         env:
-          SERVICES: dynamodb,sqs,sns
+          SERVICES: dynamodb,sns,sqs,s3
           DEFAULT_REGION: us-east-1
         options: >-
           --health-cmd="curl -f http://localhost:4566/_localstack/health"
