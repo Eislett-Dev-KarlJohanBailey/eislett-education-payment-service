@@ -8,22 +8,10 @@ import { describe, it, expect } from "@jest/globals";
 // sqs is direct and then sns is a notification with the actual message in the Message field.
 describe("parse-SQS-record", () => {
   it("should parse valid SQS event with SNS message", () => {
+    const billingEvent = require("../fixtures/billing-event-subscription-created.json");
+
     const record = {
-      messageId: "msg-1",
-      receiptHandle: "rh-1",
-      body: JSON.stringify({
-        type: "subscription.created",
-        payload: {
-          userId: "user-1",
-          productId: "prod-1",
-          currentPeriodEnd: "2026-05-17T12:00:00.000Z",
-        },
-        meta: {
-          eventId: "evt-1",
-          occurredAt: "2026-04-17T12:00:00.000Z",
-        },
-        version: 1,
-      }),
+      body: JSON.stringify(billingEvent),
     } as SQSRecord;
 
     const result = parseSqsRecord(record);
@@ -34,23 +22,10 @@ describe("parse-SQS-record", () => {
   });
 
   it("should parse an SNS notification message", () => {
+    const snsEnvelope = require("../fixtures/sns-wrapped-subscription-created.json");
+
     const record = {
-      body: JSON.stringify({
-        Type: "Notification",
-        Message: JSON.stringify({
-          type: "subscription.created",
-          payload: {
-            userId: "user-1",
-            productId: "prod-1",
-            currentPeriodEnd: "2026-05-17T12:00:00.000Z",
-          },
-          meta: {
-            eventId: "evt-1",
-            occurredAt: "2026-04-17T12:00:00.000Z",
-          },
-          version: 1,
-        }),
-      }),
+      body: JSON.stringify(snsEnvelope),
     } as SQSRecord;
 
     const result = parseSqsRecord(record);
@@ -76,30 +51,7 @@ describe("parse-SQS-record", () => {
   });
 
   it("should parse multiple records in an SQS event", () => {
-    const event = {
-      Records: [
-        {
-          messageId: "msg-1",
-          receiptHandle: "rh-1",
-          body: JSON.stringify({
-            type: "subscription.created",
-            payload: { userId: "user-1" },
-            meta: { eventId: "evt-1" },
-            version: 1,
-          }),
-        },
-        {
-          messageId: "msg-2",
-          receiptHandle: "rh-2",
-          body: JSON.stringify({
-            type: "payment.successful",
-            payload: { userId: "user-2" },
-            meta: { eventId: "evt-2" },
-            version: 1,
-          }),
-        },
-      ],
-    } as SQSEvent;
+    const event = require("../fixtures/sqs-event-two-record.json") as SQSEvent;
 
     const results = parseSqsEvent(event);
     expect(results).toHaveLength(2);
