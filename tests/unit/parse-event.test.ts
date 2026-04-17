@@ -5,7 +5,8 @@ import {
 } from "../../services/entitlement-service/src/handler/sqs/parse-event";
 import { describe, it, expect } from "@jest/globals";
 
-// sqs is direct and then sns is a notification with the actual message in the Message field. 
+// sqs is direct and then sns is a notification with the actual message in the Message field.
+describe("parse-SQS-record", () => {
   it("should parse valid SQS event with SNS message", () => {
     const record = {
       messageId: "msg-1",
