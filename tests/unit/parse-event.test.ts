@@ -4,17 +4,24 @@ import {
   parseSqsRecord,
 } from "../../services/entitlement-service/src/handler/sqs/parse-event";
 import { describe, it, expect } from "@jest/globals";
+import billingEvent from "../fixtures/billing-event-subscription-created.json";
+import sns from "../fixtures/sns-wrapped-subscription-created.json";
+import sqsEvent from "../fixtures/sqs-event-two-record.json";
+
+function sqsRecordWithBody(body: unknown): SQSRecord {
+  return {
+    body: JSON.stringify(body),
+  } as SQSRecord;
+}
+
+function makesqsEvent(body: unknown): SQSEvent {
+  return body as SQSEvent;
+}
 
 // sqs is direct and then sns is a notification with the actual message in the Message field.
 describe("parse-SQS-record", () => {
   it("should parse valid SQS event with SNS message", () => {
-    const billingEvent = require("../fixtures/billing-event-subscription-created.json");
-
-    const record = {
-      body: JSON.stringify(billingEvent),
-    } as SQSRecord;
-
-    const result = parseSqsRecord(record);
+    const result = parseSqsRecord(sqsRecordWithBody(billingEvent));
     expect(result.type).toBe("subscription.created");
     expect(result.payload.userId).toBe("user-1");
     expect(result.payload.productId).toBe("prod-1");
@@ -22,14 +29,7 @@ describe("parse-SQS-record", () => {
   });
 
   it("should parse an SNS notification message", () => {
-    const snsEnvelope = require("../fixtures/sns-wrapped-subscription-created.json");
-
-    const record = {
-      body: JSON.stringify(snsEnvelope),
-    } as SQSRecord;
-
-    const result = parseSqsRecord(record);
-
+    const result = parseSqsRecord(sqsRecordWithBody(sns));
     expect(result.type).toBe("subscription.created");
     expect(result.payload.userId).toBe("user-1");
     expect(result.payload.productId).toBe("prod-1");
@@ -38,12 +38,10 @@ describe("parse-SQS-record", () => {
 
   // when a field is missing , throw an error
   it("should throw an error if required fields are missing", () => {
-    const record = {
-      body: JSON.stringify({
-        payload: {},
-        meta: {},
-      }),
-    } as SQSRecord;
+    const record = sqsRecordWithBody({
+      type: "subscription.created",
+      // Missing payload and meta
+    });
 
     expect(() => parseSqsRecord(record)).toThrow(
       "Invalid billing event structure: missing required fields",
@@ -51,13 +49,53 @@ describe("parse-SQS-record", () => {
   });
 
   it("should parse multiple records in an SQS event", () => {
-    const event = require("../fixtures/sqs-event-two-record.json") as SQSEvent;
-
-    const results = parseSqsEvent(event);
+    const results = parseSqsEvent(makesqsEvent(sqsEvent));
     expect(results).toHaveLength(2);
     expect(results[0].type).toBe("subscription.created");
     expect(results[0].payload.userId).toBe("user-1");
     expect(results[1].type).toBe("payment.successful");
     expect(results[1].payload.userId).toBe("user-2");
+  });
+
+  it("should throw an error if the record body is not valid JSON", () => {
+    const record = {
+      body: "not-valid-json",
+    } as SQSRecord; // left this intentionally as SQSRecord function turns it into a a valid JSON string, so we need to bypass that for this test
+
+    expect(() => parseSqsRecord(record)).toThrow(
+      /Failed to parse SQS record body:/,
+    );
+  });
+
+  it("should throw an error if the SNS message is not valid JSON", () => {
+    const record = sqsRecordWithBody({
+      Type: "Notification",
+      Message: "{ not-valid-json",
+    });
+
+    expect(() => parseSqsRecord(record)).toThrow(
+      // change it to expect error message contains "Failed to parse SNS message"
+      /Failed to parse SNS message:/,
+    );
+  });
+
+  it("should treat an SNS message without the Message as an invalid event", () => {
+    const record = sqsRecordWithBody({
+      Type: "Notification",
+      // missing Message field
+    });
+
+    expect(() => parseSqsRecord(record)).toThrow(
+      /Invalid billing event structure: missing required fields/,
+    );
+  });
+
+  it("should return an empty array if there are no records in the SQS event", () => {
+    const event = makesqsEvent({
+      Records: [],
+    });
+
+    const result = parseSqsEvent(event);
+    expect(result).toEqual([]);
   });
 });
