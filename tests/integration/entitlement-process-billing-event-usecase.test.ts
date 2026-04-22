@@ -77,7 +77,7 @@ describe("ProcessBillingEventUseCase integration", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     await clearTable(TABLE_NAMES.entitlements);
-    await clearTable(TABLE_NAMES.processedEvents);
+    await clearTable(TABLE_NAMES.processedEvents, ["eventId"]);
   });
 
   afterEach(async () => {

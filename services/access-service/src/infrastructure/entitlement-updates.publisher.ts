@@ -1,5 +1,5 @@
 import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
-import { BillingEvent } from "@libs/domain";
+import { BillingEvent, entitlementUpdatesSnsMessageAttributes } from "@libs/domain";
 
 const EntitlementEventType = BillingEvent.EntitlementEventType;
 
@@ -33,9 +33,10 @@ export class EntitlementUpdatesPublisher {
         new PublishCommand({
           TopicArn: this.topicArn,
           Message: JSON.stringify(event),
-          MessageAttributes: {
-            eventType: { DataType: "String", StringValue: event.type },
-          },
+          MessageAttributes: entitlementUpdatesSnsMessageAttributes(
+            event.type,
+            key,
+          ),
         })
       );
     } catch (err) {
