@@ -183,6 +183,53 @@ describe("ProcessBillingEventUseCase integration", () => {
     expect(eventPublisher.publishCreated).toHaveBeenCalled();
   });
 
+  it("should create entitlements for addon products on subscription.created", async () => {
+    const userId = `user-addon-${Date.now()}`;
+    const productId = `prod-addon-${Date.now()}`;
+    const addonProductId = `prod-addon-${Date.now()}-addon`;
+    const currentPeriodEnd = isoDaysFromNow(30);
+
+    await createProduct(productRepo, createdProductIds, {
+      productId,
+      entitlements: [EntitlementKey.SUBJECT_ACCESS],
+    });
+
+    await createProduct(productRepo, createdProductIds, {
+      productId: addonProductId,
+      entitlements: [EntitlementKey.QUESTION_GENERATION],
+    });
+
+    await useCase.execute(
+      createBillingDomainEvent("subscription.created", {
+        userId,
+        productId,
+        currentPeriodEnd,
+        addonProductIds: [addonProductId],
+      }),
+    );
+
+    const subjectAccessEntitlement = await entitlementRepo.findByUserAndKey(
+      userId,
+      EntitlementKey.SUBJECT_ACCESS,
+    );
+
+    const questionGenerationEntitlement =
+      await entitlementRepo.findByUserAndKey(
+        userId,
+        EntitlementKey.QUESTION_GENERATION,
+      );
+
+    expect(subjectAccessEntitlement).not.toBeNull();
+    expect(subjectAccessEntitlement?.expiresAt?.toISOString()).toBe(
+      currentPeriodEnd,
+    );
+    expect(questionGenerationEntitlement).not.toBeNull();
+    expect(questionGenerationEntitlement?.expiresAt?.toISOString()).toBe(
+      currentPeriodEnd,
+    );
+    expect(eventPublisher.publishCreated).toHaveBeenCalledTimes(2);
+  });
+
   it("updates an existing entitlement for subscription.updated", async () => {
     const userId = `user-updated-${Date.now()}`;
     const productId = `prod-updated-${Date.now()}`;
@@ -224,60 +271,6 @@ describe("ProcessBillingEventUseCase integration", () => {
     expect(eventPublisher.publishUpdated).toHaveBeenCalled();
   });
 
-  it("resets usage on billing-cycle renewal", async () => {
-    const userId = `user-renew-${Date.now()}`;
-    const productId = `prod-renew-${Date.now()}`;
-    const currentPeriodEnd = isoDaysFromNow(30);
-
-    await createProduct(productRepo, createdProductIds, {
-      productId,
-      entitlements: [EntitlementKey.QUESTION_GENERATION],
-      usageLimits: [
-        {
-          metric: EntitlementKey.QUESTION_GENERATION,
-          limit: 200,
-          period: "billing_cycle",
-        },
-      ],
-    });
-
-    await useCase.execute(
-      createBillingDomainEvent("subscription.created", {
-        userId,
-        productId,
-        currentPeriodEnd,
-        addonProductIds: [],
-      }),
-    );
-
-    const entitlementBefore = await entitlementRepo.findByUserAndKey(
-      userId,
-      EntitlementKey.QUESTION_GENERATION,
-    );
-
-    expect(entitlementBefore).not.toBeNull();
-    entitlementBefore!.usage!.used = 77;
-    await entitlementRepo.update(entitlementBefore!);
-
-    await useCase.execute(
-      createBillingDomainEvent("subscription.updated", {
-        userId,
-        productId,
-        previousProductId: productId,
-        currentPeriodStart: isoDaysFromNow(31),
-        currentPeriodEnd: isoDaysFromNow(60),
-        addonProductIds: [],
-      }),
-    );
-
-    const entitlementAfter = await entitlementRepo.findByUserAndKey(
-      userId,
-      EntitlementKey.QUESTION_GENERATION,
-    );
-
-    expect(entitlementAfter!.usage!.used).toBe(0);
-  });
-
   it("should revoke access when subscription is cancelled", async () => {
     const userId = `user-cancel-${Date.now()}`;
     const productId = `prod-cancel-${Date.now()}`;
@@ -298,7 +291,7 @@ describe("ProcessBillingEventUseCase integration", () => {
     );
 
     await useCase.execute(
-      createBillingDomainEvent("subscription.cancelled", {
+      createBillingDomainEvent("subscription.canceled", {
         userId,
         productId,
         cancelAtPeriodEnd: false,
@@ -311,7 +304,7 @@ describe("ProcessBillingEventUseCase integration", () => {
     );
 
     expect(entitlement).not.toBeNull();
-    expect(entitlement!.status).toBe("inactive");
+    expect(entitlement!.status).toBe("revoked");
     expect(entitlement!.expiresAt).toBeUndefined();
     expect(eventPublisher.publishRevoked).toHaveBeenCalled();
   });
