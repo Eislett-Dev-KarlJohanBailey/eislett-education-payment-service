@@ -142,4 +142,177 @@ describe("ProcessBillingEventUseCase integration", () => {
     expect(entitlements[0].expiresAt?.toISOString()).toBe(currentPeriodEnd);
     expect(eventPublisher.publishCreated).toHaveBeenCalled();
   });
+
+  it("should process subscription.created events with products that have usage entitlements", async () => {
+    const userId = `user-${Date.now()}`;
+    const productId = `prod-${Date.now()}`;
+    const currentPeriodEnd = isoDaysFromNow(30);
+
+    await createProduct(productRepo, createdProductIds, {
+      productId,
+      name: "Math & Science (Grade 10)",
+      entitlements: [EntitlementKey.QUESTION_GENERATION],
+      usageLimits: [
+        {
+          metric: EntitlementKey.QUESTION_GENERATION,
+          limit: 100,
+          period: "billing_cycle",
+        },
+      ],
+    });
+
+    await useCase.execute(
+      createBillingDomainEvent("subscription.created", {
+        userId,
+        productId,
+        currentPeriodEnd,
+        addonProductIds: [],
+      }),
+    );
+
+    const entitlement = await entitlementRepo.findByUserAndKey(
+      userId,
+      EntitlementKey.QUESTION_GENERATION,
+    );
+
+    expect(entitlement).not.toBeNull();
+    expect(entitlement?.key).toBe(EntitlementKey.QUESTION_GENERATION);
+    expect(entitlement?.expiresAt?.toISOString()).toBe(currentPeriodEnd);
+    expect(entitlement?.usage?.limit).toBe(100);
+    expect(entitlement?.usage?.used).toBe(0);
+    expect(eventPublisher.publishCreated).toHaveBeenCalled();
+  });
+
+  it("updates an existing entitlement for subscription.updated", async () => {
+    const userId = `user-updated-${Date.now()}`;
+    const productId = `prod-updated-${Date.now()}`;
+    const currentPeriodEnd = isoDaysFromNow(30);
+    const updatedPeriodEnd = isoDaysFromNow(60);
+
+    await createProduct(productRepo, createdProductIds, {
+      productId,
+      entitlements: [EntitlementKey.SUBJECT_ACCESS],
+    });
+
+    await useCase.execute(
+      createBillingDomainEvent("subscription.created", {
+        userId,
+        productId,
+        currentPeriodEnd,
+        addonProductIds: [],
+      }),
+    );
+
+    await useCase.execute(
+      createBillingDomainEvent("subscription.updated", {
+        userId,
+        productId,
+        previousProductId: productId,
+        currentPeriodStart: isoDaysFromNow(31),
+        currentPeriodEnd: updatedPeriodEnd,
+        addonProductIds: [],
+      }),
+    );
+
+    const entitlement = await entitlementRepo.findByUserAndKey(
+      userId,
+      EntitlementKey.SUBJECT_ACCESS,
+    );
+
+    expect(entitlement).not.toBeNull();
+    expect(entitlement!.expiresAt?.toISOString()).toBe(updatedPeriodEnd);
+    expect(eventPublisher.publishUpdated).toHaveBeenCalled();
+  });
+
+  it("resets usage on billing-cycle renewal", async () => {
+    const userId = `user-renew-${Date.now()}`;
+    const productId = `prod-renew-${Date.now()}`;
+    const currentPeriodEnd = isoDaysFromNow(30);
+
+    await createProduct(productRepo, createdProductIds, {
+      productId,
+      entitlements: [EntitlementKey.QUESTION_GENERATION],
+      usageLimits: [
+        {
+          metric: EntitlementKey.QUESTION_GENERATION,
+          limit: 200,
+          period: "billing_cycle",
+        },
+      ],
+    });
+
+    await useCase.execute(
+      createBillingDomainEvent("subscription.created", {
+        userId,
+        productId,
+        currentPeriodEnd,
+        addonProductIds: [],
+      }),
+    );
+
+    const entitlementBefore = await entitlementRepo.findByUserAndKey(
+      userId,
+      EntitlementKey.QUESTION_GENERATION,
+    );
+
+    expect(entitlementBefore).not.toBeNull();
+    entitlementBefore!.usage!.used = 77;
+    await entitlementRepo.update(entitlementBefore!);
+
+    await useCase.execute(
+      createBillingDomainEvent("subscription.updated", {
+        userId,
+        productId,
+        previousProductId: productId,
+        currentPeriodStart: isoDaysFromNow(31),
+        currentPeriodEnd: isoDaysFromNow(60),
+        addonProductIds: [],
+      }),
+    );
+
+    const entitlementAfter = await entitlementRepo.findByUserAndKey(
+      userId,
+      EntitlementKey.QUESTION_GENERATION,
+    );
+
+    expect(entitlementAfter!.usage!.used).toBe(0);
+  });
+
+  it("should revoke access when subscription is cancelled", async () => {
+    const userId = `user-cancel-${Date.now()}`;
+    const productId = `prod-cancel-${Date.now()}`;
+    const currentPeriodEnd = isoDaysFromNow(30);
+
+    await createProduct(productRepo, createdProductIds, {
+      productId,
+      entitlements: [EntitlementKey.SUBJECT_ACCESS],
+    });
+
+    await useCase.execute(
+      createBillingDomainEvent("subscription.created", {
+        userId,
+        productId,
+        currentPeriodEnd,
+        addonProductIds: [],
+      }),
+    );
+
+    await useCase.execute(
+      createBillingDomainEvent("subscription.cancelled", {
+        userId,
+        productId,
+        cancelAtPeriodEnd: false,
+      }),
+    );
+
+    const entitlement = await entitlementRepo.findByUserAndKey(
+      userId,
+      EntitlementKey.SUBJECT_ACCESS,
+    );
+
+    expect(entitlement).not.toBeNull();
+    expect(entitlement!.status).toBe("inactive");
+    expect(entitlement!.expiresAt).toBeUndefined();
+    expect(eventPublisher.publishRevoked).toHaveBeenCalled();
+  });
 });
