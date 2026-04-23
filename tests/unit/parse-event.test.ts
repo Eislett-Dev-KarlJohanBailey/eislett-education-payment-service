@@ -25,6 +25,28 @@ describe("parse-SQS-record", () => {
     expect(result.meta.eventId).toBe("evt-1");
   });
 
+  it("should treat a non-matching SNS shape as a direct event and reject it", () => {
+    const record = sqsRecordWithBody({
+      type: "Notification",
+      Message: JSON.stringify(billingEvent),
+    });
+
+    expect(() => parseSqsRecord(record)).toThrow(
+      /Invalid billing event structure: missing required fields/,
+    );
+  });
+
+  it("should throw if an SNS Message is already an object", () => {
+    const record = sqsRecordWithBody({
+      Type: "Notification",
+      Message: billingEvent,
+    });
+
+    expect(() => parseSqsRecord(record)).toThrow(
+      /Failed to parse SNS message:/,
+    );
+  });
+
   // when a field is missing , throw an error
   it("should throw an error if required fields are missing", () => {
     const record = sqsRecordWithBody({
@@ -35,6 +57,22 @@ describe("parse-SQS-record", () => {
     expect(() => parseSqsRecord(record)).toThrow(
       "Invalid billing event structure: missing required fields",
     );
+  });
+
+  it("should not validate the nested payload schema", () => {
+    const record = sqsRecordWithBody({
+      type: "subscription.created",
+      payload: { unexpectedField: true },
+      meta: {
+        eventId: "evt-3",
+        occurredAt: "2026-04-20T12:01:00.000Z",
+        source: "internal",
+      },
+      version: 1,
+    });
+
+    const result = parseSqsRecord(record);
+    expect(result.payload).toEqual({ unexpectedField: true });
   });
 
   it("should parse multiple records in an SQS event", () => {

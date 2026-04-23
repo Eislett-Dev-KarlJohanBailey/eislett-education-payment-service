@@ -28,3 +28,11 @@ export function sqsEventFromBodies(bodies: unknown[]): SQSEvent {
     Records: bodies.map((body, index) => makeSqsRecord(body, index)),
   };
 }
+
+export function sqsEventFromRecords(records: SQSRecord[]): SQSEvent {
+  return { Records: records };
+}
+
+export function sqsEventFromFixture(fixture: unknown): SQSEvent {
+  return fixture as SQSEvent;
+}

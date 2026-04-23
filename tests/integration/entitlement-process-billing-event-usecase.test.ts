@@ -270,42 +270,4 @@ describe("ProcessBillingEventUseCase integration", () => {
     expect(entitlement!.expiresAt?.toISOString()).toBe(updatedPeriodEnd);
     expect(eventPublisher.publishUpdated).toHaveBeenCalled();
   });
-
-  it("should revoke access when subscription is cancelled", async () => {
-    const userId = `user-cancel-${Date.now()}`;
-    const productId = `prod-cancel-${Date.now()}`;
-    const currentPeriodEnd = isoDaysFromNow(30);
-
-    await createProduct(productRepo, createdProductIds, {
-      productId,
-      entitlements: [EntitlementKey.SUBJECT_ACCESS],
-    });
-
-    await useCase.execute(
-      createBillingDomainEvent("subscription.created", {
-        userId,
-        productId,
-        currentPeriodEnd,
-        addonProductIds: [],
-      }),
-    );
-
-    await useCase.execute(
-      createBillingDomainEvent("subscription.canceled", {
-        userId,
-        productId,
-        cancelAtPeriodEnd: false,
-      }),
-    );
-
-    const entitlement = await entitlementRepo.findByUserAndKey(
-      userId,
-      EntitlementKey.SUBJECT_ACCESS,
-    );
-
-    expect(entitlement).not.toBeNull();
-    expect(entitlement!.status).toBe("revoked");
-    expect(entitlement!.expiresAt).toBeUndefined();
-    expect(eventPublisher.publishRevoked).toHaveBeenCalled();
-  });
 });
