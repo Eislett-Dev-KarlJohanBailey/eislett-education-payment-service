@@ -155,4 +155,138 @@ describe("Entitlement Service End-to-End Flow", () => {
     expect(aiCredits?.usage).toBeDefined();
     expect(aiCredits?.usage?.limit).toBe(150);
   });
+
+  it("it is idempotent when processing the same subscription event multiple times", async () => {
+    const paymentIntentId = "pi_123";
+    const billingEvent = createBillingDomainEvent(
+      "payment.successful",
+      {
+        userId: USER_ID,
+        productId: ONE_TIME_PRODUCT_ID,
+        billingType: "one_time",
+        paymentIntentId,
+      },
+      createBillingMeta({
+        eventId: "evt-payment-1",
+        occurredAt: "2026-04-17T12:00:00.000Z",
+      }),
+    );
+
+    const sqsEvent = sqsEventFromBodies([snsWrap(billingEvent)]);
+
+    const result = await handler(sqsEvent);
+    const result2 = await handler(sqsEvent);
+
+    expect(result.batchItemFailures).toEqual([]);
+    expect(result2.batchItemFailures).toEqual([]);
+
+    const aiCredits = await entitlementRepo().findByUserAndKey(
+      USER_ID,
+      AI_CREDITS,
+    );
+
+    expect(aiCredits).toBeDefined();
+    expect(aiCredits?.usage).toBeDefined();
+    expect(aiCredits?.usage?.limit).toBe(0);
+    expect(aiCredits?.usage?.permanentLimit).toBe(25); // lifetime product, so permanent limit is set
+
+    const processedPayment =
+      await processedPaymentsRepo().isPaymentProcessed(paymentIntentId); // only one payment intent processed
+    expect(processedPayment).toBe(true);
+  });
+
+  it("sets expiration for subscription access", async () => {
+    const billingEvent = createBillingDomainEvent(
+      "subscription.created",
+      {
+        userId: USER_ID,
+        productId: BASE_PRODUCT_ID,
+        currentPeriodEnd: "2026-05-17T12:00:00.000Z",
+      },
+      createBillingMeta({
+        eventId: "evt-expiration-created",
+      }),
+    );
+
+    await handler(sqsEventFromBodies([snsWrap(billingEvent)]));
+
+    const entitlement = await entitlementRepo().findByUserAndKey(
+      USER_ID,
+      QUESTION_ACCESS,
+    );
+
+    expect(entitlement).toBeDefined();
+    expect(entitlement?.expiresAt?.toISOString()).toBe(
+      "2026-05-17T12:00:00.000Z",
+    );
+  });
+
+  it("updates expiration on renewal", async () => {
+    const createdEvent = createBillingDomainEvent(
+      "subscription.created",
+      {
+        userId: USER_ID,
+        productId: BASE_PRODUCT_ID,
+        currentPeriodEnd: "2026-05-17T12:00:00.000Z",
+      },
+      createBillingMeta({
+        eventId: "evt-renewal-created",
+      }),
+    );
+
+    await handler(sqsEventFromBodies([snsWrap(createdEvent)]));
+
+    const updatedEvent = createBillingDomainEvent(
+      "subscription.updated",
+      {
+        userId: USER_ID,
+        productId: BASE_PRODUCT_ID,
+        currentPeriodStart: "2026-05-17T12:00:00.000Z",
+        currentPeriodEnd: "2026-06-17T12:00:00.000Z",
+      },
+      createBillingMeta({
+        eventId: "evt-renewal-updated",
+      }),
+    );
+
+    await handler(sqsEventFromBodies([snsWrap(updatedEvent)]));
+
+    const entitlement = await entitlementRepo().findByUserAndKey(
+      USER_ID,
+      QUESTION_ACCESS,
+    );
+
+    expect(entitlement).toBeDefined();
+    expect(entitlement?.expiresAt?.toISOString()).toBe(
+      "2026-06-17T12:00:00.000Z",
+    );
+  });
+
+  it("should publish an SNS message when an entitlement is updated", async () => {
+    const billingEvent = createBillingDomainEvent(
+      "subscription.created",
+      {
+        userId: USER_ID,
+        productId: BASE_PRODUCT_ID,
+        currentPeriodEnd: isoDaysFromNow(30),
+      },
+      createBillingMeta({
+        eventId: "evt-sns-test",
+        occurredAt: "2026-04-17T12:00:00.000Z",
+      }),
+    );
+
+    const sqsEvent = sqsEventFromBodies([snsWrap(billingEvent)]);
+
+    await handler(sqsEvent);
+    const message = await receiveOneMessageFromQueue<any>(
+      entitlementUpdatesQueueUrl,
+      15000,
+    );
+
+    expect(message).not.toBeNull();
+    expect(message?.body).toBeDefined();
+    expect(message?.body.type).toMatch(/entitlement.availability_updated/);
+    expect(message?.body.payload).toBeDefined();
+  });
 });
