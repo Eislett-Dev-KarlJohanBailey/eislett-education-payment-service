@@ -20,6 +20,7 @@ import {
   SetQueueAttributesCommand,
   ReceiveMessageCommand,
   DeleteMessageCommand,
+  PurgeQueueCommand,
 } from "@aws-sdk/client-sqs";
 
 const ENDPOINT = process.env.LOCALSTACK_ENDPOINT || "http://localhost:4566";
@@ -146,15 +147,10 @@ const PAYMENT_TABLES: TableDef[] = [
     ],
   },
   {
+    /** Matches aws_dynamodb_table.processed_events (hash_key = eventId) for idempotency keys. */
     TableName: "processed-events-test",
-    KeySchema: [
-      { AttributeName: "PK", KeyType: "HASH" },
-      { AttributeName: "SK", KeyType: "RANGE" },
-    ],
-    AttributeDefinitions: [
-      { AttributeName: "PK", AttributeType: "S" },
-      { AttributeName: "SK", AttributeType: "S" },
-    ],
+    KeySchema: [{ AttributeName: "eventId", KeyType: "HASH" }],
+    AttributeDefinitions: [{ AttributeName: "eventId", AttributeType: "S" }],
   },
   {
     TableName: "product-purchase-intent-test",
@@ -344,6 +340,29 @@ export async function receiveOneMessageFromQueue<T = unknown>(
     return { body };
   }
   return null;
+}
+
+/** Remove all messages from a queue (for isolated / idempotent integration tests). */
+export async function purgeQueue(queueUrl: string): Promise<void> {
+  const sqs = sqsClient();
+  await sqs.send(new PurgeQueueCommand({ QueueUrl: queueUrl }));
+}
+
+/**
+ * Receive and delete every message currently in the queue (short poll per message).
+ * Stops when the queue is empty for one poll cycle.
+ */
+export async function drainAllMessagesFromQueue(
+  queueUrl: string,
+  maxMessages = 50,
+): Promise<unknown[]> {
+  const bodies: unknown[] = [];
+  for (let i = 0; i < maxMessages; i++) {
+    const m = await receiveOneMessageFromQueue<unknown>(queueUrl, 2500);
+    if (!m) break;
+    bodies.push(m.body);
+  }
+  return bodies;
 }
 
 export function setTestEnvVars(overrides: {

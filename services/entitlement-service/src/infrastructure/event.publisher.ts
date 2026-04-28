@@ -1,5 +1,5 @@
 import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
-import { BillingEvent } from "@libs/domain";
+import { BillingEvent, entitlementUpdatesSnsMessageAttributes } from "@libs/domain";
 import type { Entitlement } from "@libs/domain";
 
 type EntitlementCreatedEvent = BillingEvent.EntitlementCreatedEvent;
@@ -91,12 +91,10 @@ export class EntitlementEventPublisher {
         new PublishCommand({
           TopicArn: this.topicArn,
           Message: JSON.stringify(event),
-          MessageAttributes: {
-            eventType: {
-              DataType: "String",
-              StringValue: event.type,
-            },
-          },
+          MessageAttributes: entitlementUpdatesSnsMessageAttributes(
+            event.type,
+            event.payload.key,
+          ),
         })
       );
       console.log(
@@ -114,12 +112,10 @@ export class EntitlementEventPublisher {
         new PublishCommand({
           TopicArn: this.topicArn,
           Message: JSON.stringify(event),
-          MessageAttributes: {
-            eventType: {
-              DataType: "String",
-              StringValue: event.type
-            }
-          }
+          MessageAttributes: entitlementUpdatesSnsMessageAttributes(
+            event.type,
+            event.payload.entitlementKey,
+          ),
         })
       );
       console.log(`Published entitlement event: ${event.type} for user ${event.payload.userId}`);

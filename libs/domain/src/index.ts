@@ -23,6 +23,7 @@ export * from "./pricing/app/mappers/price.mapper";
 export * from "./utils/auth/jwt.utils";
 export * from "./utils/auth/jwt.types";
 export * from "./utils/auth/errors/authentication.error";
+export * from "./utils/sns/entitlement-updates-sns-message-attributes";
 export * from "./utils/auth/errors/forbidden.error";
 
 // Entitlements
