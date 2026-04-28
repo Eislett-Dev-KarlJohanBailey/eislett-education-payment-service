@@ -153,4 +153,93 @@ describe("Access Service End-to-End Tests", () => {
 
     expect(result.statusCode).toBe(401);
   });
+
+  it("resets usage on retrieval when reset is due", async () => {
+    await entitlementRepo.save(
+      new Entitlement(
+        userId,
+        EntitlementKey.QUESTION_GENERATION,
+        "learner" as EntitlementRole,
+        EntitlementStatus.ACTIVE,
+        new Date(),
+        undefined,
+        new EntitlementUsage(100, 77, new Date(Date.now() - 60_000), {
+          type: "periodic",
+          period: "day",
+          hour: 0,
+        }),
+      ),
+    );
+
+    const token = createJwtWithRole("learner", userId);
+
+    const result = await handler(
+      createApiGatewayEvent({
+        httpMethod: "GET",
+        path: "/access",
+        resource: "/access",
+        headers: authHeaders(token),
+      }),
+    );
+
+    expect(result.statusCode).toBe(200);
+
+    const body = JSON.parse(result.body);
+    expect(body.entitlements[EntitlementKey.QUESTION_GENERATION]).toMatchObject(
+      {
+        limit: 100,
+        used: 0,
+      },
+    );
+
+    const saved = await entitlementRepo.findByUserAndKey(
+      userId,
+      EntitlementKey.QUESTION_GENERATION,
+    );
+    expect(saved?.usage?.used).toBe(0);
+  });
+
+  it("does not reset usage when reset is not due", async () => {
+    await entitlementRepo.save(
+      new Entitlement(
+        userId,
+        EntitlementKey.QUESTION_GENERATION,
+        "learner" as EntitlementRole,
+        EntitlementStatus.ACTIVE,
+        new Date(),
+        undefined,
+        new EntitlementUsage(
+          100,
+          12,
+          new Date(Date.now() + 24 * 60 * 60 * 1000),
+          {
+            type: "periodic",
+            period: "day",
+            hour: 0,
+          },
+        ),
+      ),
+    );
+
+    const token = createJwtWithRole("learner", userId);
+
+    const result = await handler(
+      createApiGatewayEvent({
+        httpMethod: "GET",
+        path: "/access",
+        resource: "/access",
+        headers: authHeaders(token),
+      }),
+    );
+
+    expect(result.statusCode).toBe(200);
+
+    const body = JSON.parse(result.body);
+    expect(body.entitlements[EntitlementKey.QUESTION_GENERATION]).toMatchObject(
+      {
+        limit: 100,
+        used: 12,
+      },
+    );
+  });
 });
