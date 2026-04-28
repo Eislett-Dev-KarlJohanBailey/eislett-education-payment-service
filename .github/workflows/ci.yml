@@ -6,7 +6,51 @@ on:
   pull_request:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    services:
+      localstack:
+        # Pinned with docker-compose.test.yml / eislett-education-api-learner (avoid :latest flakes).
+        image: localstack/localstack:3.7.2
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: dynamodb,sns,sqs,s3
+          DEFAULT_REGION: us-east-1
+        options: >-
+          --health-cmd="curl -f http://localhost:4566/_localstack/health"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=10s
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm install
+
+      - name: Unit tests
+        run: npx jest --config jest.unit.config.js
+
+      - name: Integration tests
+        run: npx jest --config jest.integration.config.js
+
+      - name: E2E tests
+        run: npx jest --config jest.e2e.config.js
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'development' }}
     permissions:
@@ -20,7 +64,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "20"
           cache: "npm"
 
       - name: Install deps

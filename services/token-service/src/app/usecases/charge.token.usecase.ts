@@ -7,6 +7,7 @@ import {
   EntitlementKey,
   EntitlementStatus,
   DomainError,
+  type EntitlementUpdateNotifier,
 } from "@libs/domain";
 
 class NotFoundError extends DomainError {
@@ -36,7 +37,8 @@ export class ChargeTokenUseCase {
     private readonly priceRepo: PriceRepository,
     private readonly productRepo: ProductRepositoryPorts.ProductRepository,
     private readonly createEntitlementUseCase: CreateEntitlementUseCase,
-    private readonly syncProductLimitsUseCase: SyncProductLimitsToEntitlementsUseCase
+    private readonly syncProductLimitsUseCase: SyncProductLimitsToEntitlementsUseCase,
+    private readonly entitlementUpdateNotifier?: EntitlementUpdateNotifier
   ) {}
 
   async execute(input: ChargeTokenInput): Promise<ChargeTokenOutput> {
@@ -85,6 +87,7 @@ export class ChargeTokenUseCase {
     if (entitlement.usage.shouldReset()) {
       entitlement.usage.reset();
       await this.entitlementRepo.update(entitlement);
+      await this.entitlementUpdateNotifier?.notify(entitlement);
       // Re-fetch to ensure we have fresh usage
       const updated = await this.entitlementRepo.findByUserAndKey(userId, "token");
       if (!updated?.usage) {
@@ -113,6 +116,7 @@ export class ChargeTokenUseCase {
     // Decrement tokens by increasing used amount
     entitlement.usage.used += requiredAmount;
     await this.entitlementRepo.update(entitlement);
+    await this.entitlementUpdateNotifier?.notify(entitlement);
 
     // Generate payment intent ID (for reference)
     const paymentIntentId = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
