@@ -70,176 +70,347 @@ describe("Access Service End-to-End Tests", () => {
     return entitlement;
   }
 
-  it("returns access for valid JWT", async () => {
-    const entitlement = await new Entitlement(
-      userId,
-      EntitlementKey.SUBJECT_ACCESS,
-      "learner" as EntitlementRole,
-      EntitlementStatus.ACTIVE,
-      new Date(),
-    );
+  describe("GET /access", () => {
+    it("returns access for valid JWT", async () => {
+      const entitlement = await new Entitlement(
+        userId,
+        EntitlementKey.SUBJECT_ACCESS,
+        "learner" as EntitlementRole,
+        EntitlementStatus.ACTIVE,
+        new Date(),
+      );
 
-    await entitlementRepo.save(entitlement);
+      await entitlementRepo.save(entitlement);
 
-    const entitlement2 = await new Entitlement(
-      userId,
-      EntitlementKey.QUESTION_GENERATION,
-      "learner" as EntitlementRole,
-      EntitlementStatus.ACTIVE,
-      new Date(),
-      undefined,
-      new EntitlementUsage(100, 25),
-    );
-    await entitlementRepo.save(entitlement2);
+      const entitlement2 = await new Entitlement(
+        userId,
+        EntitlementKey.QUESTION_GENERATION,
+        "learner" as EntitlementRole,
+        EntitlementStatus.ACTIVE,
+        new Date(),
+        undefined,
+        new EntitlementUsage(100, 25),
+      );
+      await entitlementRepo.save(entitlement2);
 
-    const token = createJwtWithRole("learner", userId);
-    const result = await handler(
-      createApiGatewayEvent({
-        httpMethod: "GET",
-        path: "/access",
-        resource: "/access",
-        headers: authHeaders(token),
-      }),
-    );
+      const token = createJwtWithRole("learner", userId);
+      const result = await handler(
+        createApiGatewayEvent({
+          httpMethod: "GET",
+          path: "/access",
+          resource: "/access",
+          headers: authHeaders(token),
+        }),
+      );
 
-    expect(result.statusCode).toBe(200);
+      expect(result.statusCode).toBe(200);
 
-    const body = JSON.parse(result.body);
-    expect(body.userId).toBe(userId);
-    expect(body.entitlements[EntitlementKey.SUBJECT_ACCESS]).toBe(true);
-    expect(body.entitlements[EntitlementKey.QUESTION_GENERATION]).toMatchObject(
-      {
+      const body = JSON.parse(result.body);
+      expect(body.userId).toBe(userId);
+      expect(body.entitlements[EntitlementKey.SUBJECT_ACCESS]).toBe(true);
+      expect(
+        body.entitlements[EntitlementKey.QUESTION_GENERATION],
+      ).toMatchObject({
         limit: 100,
         used: 25,
-      },
-    );
-  });
+      });
+    });
 
-  it("returns 401 for missing JWT", async () => {
-    const result = await handler(
-      createApiGatewayEvent({
-        httpMethod: "GET",
-        path: "/access",
-        resource: "/access",
-      }),
-    );
-    expect(result.statusCode).toBe(401);
-  });
-
-  it("returns 401 when JWT is invalid", async () => {
-    const result = await handler(
-      createApiGatewayEvent({
-        httpMethod: "GET",
-        path: "/access",
-        resource: "/access",
-        headers: authHeaders("not-a-valid-token"),
-      }),
-    );
-
-    expect(result.statusCode).toBe(401);
-  });
-
-  it("returns 401 when JWT is expired", async () => {
-    const token = createExpiredJwt("learner", userId);
-
-    const result = await handler(
-      createApiGatewayEvent({
-        httpMethod: "GET",
-        path: "/access",
-        resource: "/access",
-        headers: authHeaders(token),
-      }),
-    );
-
-    expect(result.statusCode).toBe(401);
-  });
-
-  it("resets usage on retrieval when reset is due", async () => {
-    await entitlementRepo.save(
-      new Entitlement(
-        userId,
-        EntitlementKey.QUESTION_GENERATION,
-        "learner" as EntitlementRole,
-        EntitlementStatus.ACTIVE,
-        new Date(),
-        undefined,
-        new EntitlementUsage(100, 77, new Date(Date.now() - 60_000), {
-          type: "periodic",
-          period: "day",
-          hour: 0,
+    it("returns 401 for missing JWT", async () => {
+      const result = await handler(
+        createApiGatewayEvent({
+          httpMethod: "GET",
+          path: "/access",
+          resource: "/access",
         }),
-      ),
-    );
+      );
+      expect(result.statusCode).toBe(401);
+    });
 
-    const token = createJwtWithRole("learner", userId);
+    it("returns 401 when JWT is invalid", async () => {
+      const result = await handler(
+        createApiGatewayEvent({
+          httpMethod: "GET",
+          path: "/access",
+          resource: "/access",
+          headers: authHeaders("not-a-valid-token"),
+        }),
+      );
 
-    const result = await handler(
-      createApiGatewayEvent({
-        httpMethod: "GET",
-        path: "/access",
-        resource: "/access",
-        headers: authHeaders(token),
-      }),
-    );
+      expect(result.statusCode).toBe(401);
+    });
 
-    expect(result.statusCode).toBe(200);
+    it("returns 401 when JWT is expired", async () => {
+      const token = createExpiredJwt("learner", userId);
 
-    const body = JSON.parse(result.body);
-    expect(body.entitlements[EntitlementKey.QUESTION_GENERATION]).toMatchObject(
-      {
-        limit: 100,
-        used: 0,
-      },
-    );
+      const result = await handler(
+        createApiGatewayEvent({
+          httpMethod: "GET",
+          path: "/access",
+          resource: "/access",
+          headers: authHeaders(token),
+        }),
+      );
 
-    const saved = await entitlementRepo.findByUserAndKey(
-      userId,
-      EntitlementKey.QUESTION_GENERATION,
-    );
-    expect(saved?.usage?.used).toBe(0);
-  });
+      expect(result.statusCode).toBe(401);
+    });
 
-  it("does not reset usage when reset is not due", async () => {
-    await entitlementRepo.save(
-      new Entitlement(
-        userId,
-        EntitlementKey.QUESTION_GENERATION,
-        "learner" as EntitlementRole,
-        EntitlementStatus.ACTIVE,
-        new Date(),
-        undefined,
-        new EntitlementUsage(
-          100,
-          12,
-          new Date(Date.now() + 24 * 60 * 60 * 1000),
-          {
+    it("resets usage on retrieval when reset is due", async () => {
+      await entitlementRepo.save(
+        new Entitlement(
+          userId,
+          EntitlementKey.QUESTION_GENERATION,
+          "learner" as EntitlementRole,
+          EntitlementStatus.ACTIVE,
+          new Date(),
+          undefined,
+          new EntitlementUsage(100, 77, new Date(Date.now() - 60_000), {
             type: "periodic",
             period: "day",
             hour: 0,
-          },
+          }),
         ),
-      ),
-    );
+      );
 
-    const token = createJwtWithRole("learner", userId);
+      const token = createJwtWithRole("learner", userId);
 
-    const result = await handler(
-      createApiGatewayEvent({
-        httpMethod: "GET",
-        path: "/access",
-        resource: "/access",
-        headers: authHeaders(token),
-      }),
-    );
+      const result = await handler(
+        createApiGatewayEvent({
+          httpMethod: "GET",
+          path: "/access",
+          resource: "/access",
+          headers: authHeaders(token),
+        }),
+      );
 
-    expect(result.statusCode).toBe(200);
+      expect(result.statusCode).toBe(200);
 
-    const body = JSON.parse(result.body);
-    expect(body.entitlements[EntitlementKey.QUESTION_GENERATION]).toMatchObject(
-      {
+      const body = JSON.parse(result.body);
+      expect(
+        body.entitlements[EntitlementKey.QUESTION_GENERATION],
+      ).toMatchObject({
+        limit: 100,
+        used: 0,
+      });
+
+      const saved = await entitlementRepo.findByUserAndKey(
+        userId,
+        EntitlementKey.QUESTION_GENERATION,
+      );
+      expect(saved?.usage?.used).toBe(0);
+    });
+
+    it("does not reset usage when reset is not due", async () => {
+      await entitlementRepo.save(
+        new Entitlement(
+          userId,
+          EntitlementKey.QUESTION_GENERATION,
+          "learner" as EntitlementRole,
+          EntitlementStatus.ACTIVE,
+          new Date(),
+          undefined,
+          new EntitlementUsage(
+            100,
+            12,
+            new Date(Date.now() + 24 * 60 * 60 * 1000),
+            {
+              type: "periodic",
+              period: "day",
+              hour: 0,
+            },
+          ),
+        ),
+      );
+
+      const token = createJwtWithRole("learner", userId);
+
+      const result = await handler(
+        createApiGatewayEvent({
+          httpMethod: "GET",
+          path: "/access",
+          resource: "/access",
+          headers: authHeaders(token),
+        }),
+      );
+
+      expect(result.statusCode).toBe(200);
+
+      const body = JSON.parse(result.body);
+      expect(
+        body.entitlements[EntitlementKey.QUESTION_GENERATION],
+      ).toMatchObject({
         limit: 100,
         used: 12,
-      },
-    );
+      });
+    });
+
+    it("calculates correct limit with permanentLimit", async () => {
+      await entitlementRepo.save(
+        new Entitlement(
+          userId,
+          EntitlementKey.QUESTION_GENERATION,
+          "learner" as EntitlementRole,
+          EntitlementStatus.ACTIVE,
+          new Date(),
+          undefined,
+          new EntitlementUsage(100, 20, undefined, undefined, 50),
+        ),
+      );
+
+      const token = createJwtWithRole("learner", userId);
+
+      const result = await handler(
+        createApiGatewayEvent({
+          httpMethod: "GET",
+          path: "/access",
+          resource: "/access",
+          headers: authHeaders(token),
+        }),
+      );
+
+      expect(result.statusCode).toBe(200);
+
+      const body = JSON.parse(result.body);
+      expect(
+        body.entitlements[EntitlementKey.QUESTION_GENERATION],
+      ).toMatchObject({
+        limit: 150,
+        used: 20,
+      });
+    });
+
+    it("filters inactive and expired entitlements", async () => {
+      await entitlementRepo.save(
+        new Entitlement(
+          userId,
+          EntitlementKey.ADVANCED_ANALYTICS,
+          "learner" as EntitlementRole,
+          EntitlementStatus.EXPIRED,
+          new Date(),
+        ),
+      );
+
+      await entitlementRepo.save(
+        new Entitlement(
+          userId,
+          EntitlementKey.QUESTION_GENERATION,
+          "learner" as EntitlementRole,
+          EntitlementStatus.ACTIVE,
+          new Date(),
+          new Date(Date.now() - 60_000),
+          new EntitlementUsage(100, 5),
+        ), // make it expire after and not be active, so it would be undefined
+      );
+
+      const token = createJwtWithRole("learner", userId);
+
+      const result = await handler(
+        createApiGatewayEvent({
+          httpMethod: "GET",
+          path: "/access",
+          resource: "/access",
+          headers: authHeaders(token),
+        }),
+      );
+
+      expect(result.statusCode).toBe(200);
+
+      const body = JSON.parse(result.body);
+      expect(
+        body.entitlements[EntitlementKey.ADVANCED_ANALYTICS],
+      ).toBeUndefined();
+      expect(
+        body.entitlements[EntitlementKey.QUESTION_GENERATION],
+      ).toBeUndefined();
+    });
+
+    it("handles many records within the performance budget", async () => {
+      jest.setTimeout(30000);
+
+      for (let i = 0; i < 250; i++) {
+        await entitlementRepo.save(
+          new Entitlement(
+            userId,
+            `QUESTION_GENERATION_${i}` as EntitlementKey,
+            "learner" as EntitlementRole,
+            EntitlementStatus.ACTIVE,
+            new Date(),
+            undefined,
+            new EntitlementUsage(100, i % 10),
+          ),
+        );
+      }
+
+      const token = createJwtWithRole("learner", userId);
+
+      const startedAt = Date.now();
+      const result = await handler(
+        createApiGatewayEvent({
+          httpMethod: "GET",
+          path: "/access",
+          resource: "/access",
+          headers: authHeaders(token),
+        }),
+      );
+      const durationMs = Date.now() - startedAt;
+
+      expect(result.statusCode).toBe(200);
+      expect(durationMs).toBeLessThan(2000);
+    });
+  });
+
+  describe("GET /access/:key", () => {
+    it("returns a single entitlement by key for a valid JWT", async () => {
+      await entitlementRepo.save(
+        new Entitlement(
+          userId,
+          EntitlementKey.QUESTION_GENERATION,
+          "learner" as EntitlementRole,
+          EntitlementStatus.ACTIVE,
+          new Date(),
+          undefined,
+          new EntitlementUsage(100, 25),
+        ),
+      );
+
+      const token = createJwtWithRole("learner", userId);
+
+      const result = await handler(
+        createApiGatewayEvent({
+          httpMethod: "GET",
+          path: "/access/question_generation",
+          resource: "/access/{key}",
+          pathParameters: { key: EntitlementKey.QUESTION_GENERATION },
+          headers: authHeaders(token),
+        }),
+      );
+
+      expect(result.statusCode).toBe(200);
+
+      const body = JSON.parse(result.body);
+      expect(body.userId).toBe(userId);
+      expect(
+        body.entitlements[EntitlementKey.QUESTION_GENERATION],
+      ).toMatchObject({
+        limit: 100,
+        used: 25,
+      });
+    });
+
+    it("returns 404 when the entitlement does not exist", async () => {
+      const token = createJwtWithRole("learner", userId);
+
+      const result = await handler(
+        createApiGatewayEvent({
+          httpMethod: "GET",
+          path: "/access/question_generation",
+          resource: "/access/{key}",
+          pathParameters: { key: EntitlementKey.QUESTION_GENERATION },
+          headers: authHeaders(token),
+        }),
+      );
+
+      expect(result.statusCode).toBe(404);
+    });
   });
 });
