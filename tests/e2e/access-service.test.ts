@@ -114,4 +114,43 @@ describe("Access Service End-to-End Tests", () => {
       },
     );
   });
+
+  it("returns 401 for missing JWT", async () => {
+    const result = await handler(
+      createApiGatewayEvent({
+        httpMethod: "GET",
+        path: "/access",
+        resource: "/access",
+      }),
+    );
+    expect(result.statusCode).toBe(401);
+  });
+
+  it("returns 401 when JWT is invalid", async () => {
+    const result = await handler(
+      createApiGatewayEvent({
+        httpMethod: "GET",
+        path: "/access",
+        resource: "/access",
+        headers: authHeaders("not-a-valid-token"),
+      }),
+    );
+
+    expect(result.statusCode).toBe(401);
+  });
+
+  it("returns 401 when JWT is expired", async () => {
+    const token = createExpiredJwt("learner", userId);
+
+    const result = await handler(
+      createApiGatewayEvent({
+        httpMethod: "GET",
+        path: "/access",
+        resource: "/access",
+        headers: authHeaders(token),
+      }),
+    );
+
+    expect(result.statusCode).toBe(401);
+  });
 });
