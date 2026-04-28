@@ -60,16 +60,12 @@ locals {
 
 # SNS Topic for Entitlement Updates (usage/availability changes). Consumed by downstream subscribers.
 resource "aws_sns_topic" "entitlement_updates" {
-  name = "${var.project_name}-${var.environment}-entitlement-updates"
+  name = "${var.project_name}-${var.environment}-entitlement-updates-topic"
 
   tags = {
     Environment = var.environment
     Service     = "access-service"
     Name        = "Entitlement Updates Topic"
-  }
-
-  lifecycle {
-    ignore_changes = [tags]
   }
 }
 

@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent } from "aws-lambda";
 import { parseRequest } from "./parse-request";
 import { routes } from "./routes";
 import { response, errorResponse } from "./response";
+import { requireUser, optionalUser } from "@libs/domain";
 
 /**
  * Normalizes the path by removing /v1 prefix if present
@@ -146,11 +147,23 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
       ...extractedPathParams
     };
     
+    const pathOnly = normalizedPath.split("?")[0].replace(/\/$/, "") || "/";
+    const isPostPrices =
+      req.method === "POST" && pathOnly === "/prices";
+
+    let user: { id: string; role?: string } | undefined;
+    if (isPostPrices) {
+      user = requireUser(event) ?? undefined;
+    } else {
+      user = optionalUser(event) ?? undefined;
+    }
+
     const finalReq = {
       ...normalizedReq,
-      pathParams: mergedPathParams
+      pathParams: mergedPathParams,
+      user,
     };
-    
+
     console.log("Final request context pathParams:", finalReq.pathParams);
 
     const result = await handler(finalReq);
