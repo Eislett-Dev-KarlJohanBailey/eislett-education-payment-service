@@ -10,3 +10,5 @@ process.env.LOCALSTACK_ENDPOINT = LOCALSTACK_ENDPOINT;
 process.env.AWS_ENDPOINT_URL = LOCALSTACK_ENDPOINT;
 process.env.ENVIRONMENT = "test";
 process.env.ENTITLEMENTS_TABLE = "entitlements-test";
+process.env.PRICES_TABLE = "prices-test";
+process.env.PRODUCTS_TABLE = "products-test";
