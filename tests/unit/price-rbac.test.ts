@@ -107,4 +107,34 @@ describe("Price RBAC", () => {
       },
     );
   });
+
+  describe("DeletePriceController", () => {
+    it.each(["admin", "administrator"])("allows role %s", async (role) => {
+      const useCase = makeUseCase();
+      const controller = new DeletePriceController(useCase as any);
+
+      const result = await controller.handle({
+        ...makeReq(role),
+        method: "DELETE",
+      });
+
+      expect(result).toEqual({ ok: true });
+      expect(useCase.execute).toHaveBeenCalledWith("price-1");
+    });
+
+    it.each(["learner", "random-role", "ADMINISTRATORX", ""])(
+      "rejects role %s",
+      async (role) => {
+        const useCase = makeUseCase();
+        const controller = new DeletePriceController(useCase as any);
+
+        await expect(
+          controller.handle({
+            ...makeReq(role),
+            method: "DELETE",
+          }),
+        ).rejects.toThrow(ForbiddenError);
+      },
+    );
+  });
 });
