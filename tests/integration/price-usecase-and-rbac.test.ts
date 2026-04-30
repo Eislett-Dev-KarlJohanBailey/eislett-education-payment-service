@@ -55,4 +55,74 @@ describe("Pricing Service - Use Case and RBAC Integration Tests", () => {
 
     expect(result.statusCode).toBe(401);
   });
+
+  it.each(forbiddenRoles)(
+    "returns 403 for invalid role %s on POST /prices",
+    async (role) => {
+      const event = createApiGatewayEvent({
+        httpMethod: "POST",
+        path: "/prices",
+        resource: "/prices",
+        body,
+        headers: {
+          ...createApiGatewayEvent().headers,
+          Authorization: `Bearer ${createJwtWithRole(role)}`,
+        },
+      });
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(403);
+    },
+  );
+
+  it("returns 201 for admin on POST /prices", async () => {
+    const event = createApiGatewayEvent({
+      httpMethod: "POST",
+      path: "/prices",
+      resource: "/prices",
+      body,
+      headers: {
+        ...createApiGatewayEvent().headers,
+        Authorization: `Bearer ${createJwtWithRole("admin")}`,
+      },
+    });
+
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(201);
+  });
+
+  it("returns 403 for invalid role on DELETE /prices/{id}", async () => {
+    const createRes = await handler(
+      createApiGatewayEvent({
+        httpMethod: "POST",
+        path: "/prices",
+        resource: "/prices",
+        body,
+        headers: {
+          ...createApiGatewayEvent().headers,
+          Authorization: `Bearer ${createJwtWithRole("admin")}`,
+        },
+      }),
+    );
+
+    const priceId = JSON.parse(createRes.body).priceId;
+
+    const event = createApiGatewayEvent({
+      httpMethod: "DELETE",
+      path: `/prices/${priceId}`,
+      resource: "/prices/{id}",
+      pathParameters: { id: priceId },
+      body: null,
+      headers: {
+        ...createApiGatewayEvent().headers,
+        Authorization: `Bearer ${createJwtWithRole("random-role")}`,
+      },
+    });
+
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(403);
+  });
 });

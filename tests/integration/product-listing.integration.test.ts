@@ -41,7 +41,7 @@ describe("Product listing integration tests", () => {
       isActive: false,
     });
 
-    expect(result.items.length).toBe(2); // currently only checks of type subscription
+    expect(result.items.length).toBe(4);
     result.items.forEach((product) => {
       expect(product.isActive).toBe(false);
     });

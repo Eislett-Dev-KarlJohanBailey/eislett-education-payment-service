@@ -36,7 +36,7 @@ describe("DynamoProductRepository Integration Tests", () => {
       { pageNumber: 1, pageSize: 50 },
     );
 
-    expect(result.items.length).toBe(2); // only looks at products with type subscription when type is not specified
+    expect(result.items.length).toBe(2);
     result.items.forEach((product) => {
       expect(product.isActive).toBe(false);
     });
@@ -50,7 +50,7 @@ describe("DynamoProductRepository Integration Tests", () => {
       { pageNumber: 1, pageSize: 50 },
     );
 
-    expect(result.items.length).toBe(8); // only looks at products with type subscription when type is not specified
+    expect(result.items.length).toBe(8); // default is subscription product
     result.items.forEach((product) => {
       expect(product.isActive).toBe(true);
     });
