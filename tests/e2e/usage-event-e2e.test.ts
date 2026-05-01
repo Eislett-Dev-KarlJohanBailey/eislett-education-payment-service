@@ -1,0 +1,252 @@
+import { jest } from "@jest/globals";
+import {
+  DynamoEntitlementRepository,
+  Entitlement,
+  EntitlementKey,
+  EntitlementStatus,
+  EntitlementUsage,
+} from "@libs/domain";
+import { handler } from "../../services/usage-event-service/src/handler";
+import {
+  createAllTables,
+  clearTable,
+  deleteAllTables,
+  createQueueSubscribedToSns,
+  createSnsTopic,
+  docClient,
+  drainAllMessagesFromQueue,
+  receiveOneMessageFromQueue,
+  setTestEnvVars,
+  TABLE_NAMES,
+} from "../helpers/localstack";
+import { sqsEventFromBodies } from "../helpers/sqs";
+
+describe("Usage Event E2E Test", () => {
+  let entitlementRepository: DynamoEntitlementRepository;
+  let entitlementUpdatesQueueUrl: string;
+
+  const userId = `user-${Date.now()}`;
+  const entitlementKey = EntitlementKey.QUESTION_GENERATION;
+
+  beforeAll(async () => {
+    await createAllTables();
+    setTestEnvVars();
+
+    const entitlementUpdatesTopicArn = await createSnsTopic(
+      "usage-event-entitlement-updates-test",
+    );
+    entitlementUpdatesQueueUrl = await createQueueSubscribedToSns(
+      "usage-event-entitlement-updates-test-queue",
+      entitlementUpdatesTopicArn,
+    );
+    process.env.ENTITLEMENT_UPDATES_TOPIC_ARN = entitlementUpdatesTopicArn;
+
+    entitlementRepository = new DynamoEntitlementRepository(
+      TABLE_NAMES.entitlements,
+      docClient(),
+    );
+  });
+
+  beforeEach(async () => {
+    await clearTable(TABLE_NAMES.entitlements);
+    await drainAllMessagesFromQueue(entitlementUpdatesQueueUrl);
+  });
+
+  afterAll(async () => {
+    await deleteAllTables();
+  });
+
+  async function createEntitlement(params: {
+    userId: string;
+    used?: number;
+    limit?: number;
+    expiresAt?: Date;
+  }) {
+    const entitlement: Entitlement = new Entitlement(
+      params.userId,
+      entitlementKey,
+      "learner",
+      EntitlementStatus.ACTIVE,
+      new Date(),
+      params.expiresAt,
+      new EntitlementUsage(params.limit ?? 100, params.used ?? 0),
+    );
+
+    await entitlementRepository.save(entitlement);
+    return entitlement;
+  }
+
+  it("updates usaged and publishes entitlement availability ", async () => {
+    await createEntitlement({ userId, used: 10, limit: 100 });
+
+    const result = await handler(
+      sqsEventFromBodies([
+        {
+          userId,
+          entitlementKey,
+          amount: 5,
+        },
+      ]),
+    );
+
+    expect(result.batchItemFailures).toEqual([]);
+
+    const entitlement = await entitlementRepository.findByUserAndKey(
+      userId,
+      entitlementKey,
+    );
+    expect(entitlement?.usage?.used).toBe(15);
+
+    const message = await receiveOneMessageFromQueue<any>(
+      entitlementUpdatesQueueUrl,
+      15000,
+    );
+
+    expect(message).not.toBeNull();
+    expect(message?.body).toMatchObject({
+      type: "entitlement.availability_updated",
+      payload: {
+        userId,
+        key: entitlementKey,
+        currentAvailableUsage: 85,
+      },
+      version: 1,
+    });
+  });
+
+  it("defaults amount to 1 when amount is omitted", async () => {
+    await createEntitlement({ userId, used: 0, limit: 100 });
+
+    const result = await handler(
+      sqsEventFromBodies([
+        {
+          userId,
+          entitlementKey,
+        },
+      ]),
+    );
+
+    expect(result.batchItemFailures).toEqual([]);
+
+    const entitlement = await entitlementRepository.findByUserAndKey(
+      userId,
+      entitlementKey,
+    );
+
+    expect(entitlement?.usage?.used).toBe(1);
+  });
+
+  it("defaults to 1 when a negative number is sent", async () => {
+    await createEntitlement({ userId, used: 20, limit: 100 });
+
+    const result = await handler(
+      sqsEventFromBodies([
+        {
+          userId,
+          entitlementKey,
+          amount: -5,
+        },
+      ]),
+    );
+
+    expect(result.batchItemFailures).toEqual([]);
+
+    const entitlement = await entitlementRepository.findByUserAndKey(
+      userId,
+      entitlementKey,
+    );
+
+    expect(entitlement?.usage?.used).toBe(21);
+  });
+
+  it("does not allow usage to exceed the limit", async () => {
+    await createEntitlement({ userId, used: 3, limit: 6 });
+
+    const result = await handler(
+      sqsEventFromBodies([
+        {
+          userId,
+          entitlementKey,
+          amount: 4,
+        },
+      ]),
+    );
+
+    expect(result.batchItemFailures).toEqual([{ itemIdentifier: "msg-1" }]);
+
+    const entitlement = await entitlementRepository.findByUserAndKey(
+      userId,
+      entitlementKey,
+    );
+
+    expect(entitlement?.usage?.used).toBe(3);
+  });
+
+  it("rejects usage when entitlement has no usage tracking", async () => {
+    await entitlementRepository.save(
+      new Entitlement(
+        userId,
+        entitlementKey,
+        "learner",
+        EntitlementStatus.ACTIVE,
+        new Date(),
+        undefined,
+        undefined,
+      ),
+    );
+
+    const result = await handler(
+      sqsEventFromBodies([
+        {
+          userId,
+          entitlementKey,
+          amount: 1,
+        },
+      ]),
+    );
+
+    expect(result.batchItemFailures).toEqual([{ itemIdentifier: "msg-1" }]);
+  });
+
+  it("rejects usage when entitlement is expired", async () => {
+    await createEntitlement({
+      userId,
+      used: 0,
+      limit: 100,
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+
+    const result = await handler(
+      sqsEventFromBodies([
+        {
+          userId,
+          entitlementKey,
+          amount: 1,
+        },
+      ]),
+    );
+
+    expect(result.batchItemFailures).toEqual([{ itemIdentifier: "msg-1" }]);
+  });
+
+  it("rejects usage when entitlement is expired", async () => {
+    await createEntitlement({
+      userId,
+      used: 0,
+      limit: 100,
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+
+    const result = await handler(
+      sqsEventFromBodies([
+        {
+          userId,
+          entitlementKey,
+          amount: 1,
+        },
+      ]),
+    );
+
+    expect(result.batchItemFailures).toEqual([{ itemIdentifier: "msg-1" }]);
+  });
+});
