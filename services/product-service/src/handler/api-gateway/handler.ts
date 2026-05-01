@@ -91,10 +91,10 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
     });
 
     // Update the path in the request context to the normalized version
-    const normalizedReq = {
-      ...req,
-      path: normalizedPath,
-    };
+    // const normalizedReq = {
+    //   ...req,
+    //   path: normalizedPath,
+    // };
 
     const handler = findRouteHandler(req.method, req.path);
     console.log("Found handler:", handler ? "yes" : "no");
