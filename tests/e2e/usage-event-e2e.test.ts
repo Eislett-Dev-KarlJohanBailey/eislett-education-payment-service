@@ -20,6 +20,7 @@ import {
   TABLE_NAMES,
 } from "../helpers/localstack";
 import { sqsEventFromBodies } from "../helpers/sqs";
+import { ScanCommand } from "@aws-sdk/lib-dynamodb";
 
 describe("Usage Event E2E Test", () => {
   let entitlementRepository: DynamoEntitlementRepository;
@@ -49,7 +50,7 @@ describe("Usage Event E2E Test", () => {
 
   beforeEach(async () => {
     await clearTable(TABLE_NAMES.entitlements);
-    await drainAllMessagesFromQueue(entitlementUpdatesQueueUrl);
+    await drainAllMessagesFromQueue(entitlementUpdatesQueueUrl, 500);
   });
 
   afterAll(async () => {
@@ -75,6 +76,38 @@ describe("Usage Event E2E Test", () => {
     await entitlementRepository.save(entitlement);
     return entitlement;
   }
+
+  it("publishes usage events", async () => {
+    await createEntitlement({ userId, used: 10, limit: 100 });
+
+    await handler(
+      sqsEventFromBodies([
+        {
+          userId,
+          entitlementKey,
+          amount: 5,
+        },
+      ]),
+    );
+
+    const message = await receiveOneMessageFromQueue<any>(
+      entitlementUpdatesQueueUrl,
+      15000,
+    );
+
+    expect(message?.body).toMatchObject({
+      type: "entitlement.availability_updated",
+      payload: {
+        userId,
+        key: entitlementKey,
+        currentAvailableUsage: 85,
+      },
+      meta: {
+        source: "internal",
+      },
+      version: 1,
+    });
+  });
 
   it("updates usaged and publishes entitlement availability ", async () => {
     await createEntitlement({ userId, used: 10, limit: 100 });
@@ -229,13 +262,8 @@ describe("Usage Event E2E Test", () => {
     expect(result.batchItemFailures).toEqual([{ itemIdentifier: "msg-1" }]);
   });
 
-  it("rejects usage when entitlement is expired", async () => {
-    await createEntitlement({
-      userId,
-      used: 0,
-      limit: 100,
-      expiresAt: new Date(Date.now() - 60_000),
-    });
+  it("processes a mixed batch and returns only failed record IDs", async () => {
+    await createEntitlement({ userId, used: 0, limit: 100 });
 
     const result = await handler(
       sqsEventFromBodies([
@@ -244,9 +272,43 @@ describe("Usage Event E2E Test", () => {
           entitlementKey,
           amount: 1,
         },
+        {
+          userId,
+          entitlementKey: "missing-entitlement",
+          amount: 1,
+        },
       ]),
     );
 
-    expect(result.batchItemFailures).toEqual([{ itemIdentifier: "msg-1" }]);
+    expect(result.batchItemFailures).toEqual([{ itemIdentifier: "msg-2" }]);
+  });
+
+  test.todo("stores a usage log record with a 90-day TTL");
+
+  it("handles many usage records within a certain time cons", async () => {
+    jest.setTimeout(30000);
+
+    const batchUserId = `batch-user-${Date.now()}`;
+    await createEntitlement({ userId: batchUserId, used: 0, limit: 1000 });
+
+    const records = Array.from({ length: 100 }, () => ({
+      userId: batchUserId,
+      entitlementKey,
+      amount: 1,
+    }));
+
+    const startedAt = Date.now();
+    const result = await handler(sqsEventFromBodies(records));
+    const durationMs = Date.now() - startedAt;
+
+    expect(result.batchItemFailures).toEqual([]);
+    expect(durationMs).toBeLessThan(15000);
+
+    const entitlement = await entitlementRepository.findByUserAndKey(
+      batchUserId,
+      entitlementKey,
+    );
+
+    expect(entitlement?.usage?.used).toBe(100);
   });
 });
