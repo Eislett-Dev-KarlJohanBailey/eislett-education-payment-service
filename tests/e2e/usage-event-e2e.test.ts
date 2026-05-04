@@ -173,7 +173,7 @@ describe("Usage Event E2E Test", () => {
     expect(entitlement?.usage?.used).toBe(1);
   });
 
-  it("defaults to 1 when a negative number is sent", async () => {
+  it("decrements usage when a negative amount is sent", async () => {
     await createEntitlement({ userId, used: 20, limit: 100 });
 
     const result = await handler(
@@ -193,7 +193,7 @@ describe("Usage Event E2E Test", () => {
       entitlementKey,
     );
 
-    expect(entitlement?.usage?.used).toBe(21);
+    expect(entitlement?.usage?.used).toBe(15);
   });
 
   it("does not allow usage to exceed the limit", async () => {
