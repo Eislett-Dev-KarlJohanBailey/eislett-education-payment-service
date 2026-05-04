@@ -22,6 +22,10 @@ import {
 import { sqsEventFromBodies } from "../helpers/sqs";
 import { ScanCommand } from "@aws-sdk/lib-dynamodb";
 
+function makeUsageLogTtl() {
+  return Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60;
+}
+
 describe("Usage Event E2E Test", () => {
   let entitlementRepository: DynamoEntitlementRepository;
   let entitlementUpdatesQueueUrl: string;
@@ -283,9 +287,49 @@ describe("Usage Event E2E Test", () => {
     expect(result.batchItemFailures).toEqual([{ itemIdentifier: "msg-2" }]);
   });
 
-  test.todo("stores a usage log record with a 90-day TTL");
+  it("stores a usage log record with a 90-day TTL", async () => {
+    await createEntitlement({ userId, used: 10, limit: 100 });
 
-  it("handles many usage records within a certain time cons", async () => {
+    await handler(
+      sqsEventFromBodies([
+        {
+          userId,
+          entitlementKey,
+          amount: 5,
+        },
+      ]),
+    );
+
+    const result = await docClient().send(
+      new ScanCommand({
+        TableName: "usage-logs-test",
+        Limit: 10,
+      }),
+    );
+
+    expect(result.Items?.length).toBeGreaterThan(0);
+
+    const log = result.Items?.[0];
+
+    expect(log).toMatchObject({
+      PK: `USER#${userId}`,
+      userId,
+      entitlementKey,
+      delta: 5,
+      previousUsed: 10,
+      newUsed: 15,
+    });
+
+    const ttl = log?.ttl as number;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const expectedTtlMin = nowSeconds + 90 * 24 * 60 * 60 - 60;
+    const expectedTtlMax = nowSeconds + 90 * 24 * 60 * 60 + 60;
+
+    expect(ttl).toBeGreaterThanOrEqual(expectedTtlMin);
+    expect(ttl).toBeLessThanOrEqual(expectedTtlMax);
+  });
+
+  it("handles many usage records within a certain time constraint", async () => {
     jest.setTimeout(30000);
 
     const batchUserId = `batch-user-${Date.now()}`;
