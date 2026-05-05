@@ -12,7 +12,11 @@ import {
   ScanCommand,
   DeleteCommand,
 } from "@aws-sdk/lib-dynamodb";
-import { SNSClient, CreateTopicCommand, SubscribeCommand } from "@aws-sdk/client-sns";
+import {
+  SNSClient,
+  CreateTopicCommand,
+  SubscribeCommand,
+} from "@aws-sdk/client-sns";
 import {
   SQSClient,
   CreateQueueCommand,
@@ -120,9 +124,7 @@ const PAYMENT_TABLES: TableDef[] = [
   {
     TableName: "dunning-test",
     KeySchema: [{ AttributeName: "userId", KeyType: "HASH" }],
-    AttributeDefinitions: [
-      { AttributeName: "userId", AttributeType: "S" },
-    ],
+    AttributeDefinitions: [{ AttributeName: "userId", AttributeType: "S" }],
   },
   {
     TableName: "transactions-test",
@@ -171,6 +173,17 @@ const PAYMENT_TABLES: TableDef[] = [
       },
     ],
   },
+  {
+    TableName: "usage-logs-test",
+    KeySchema: [
+      { AttributeName: "PK", KeyType: "HASH" },
+      { AttributeName: "SK", KeyType: "RANGE" },
+    ],
+    AttributeDefinitions: [
+      { AttributeName: "PK", AttributeType: "S" },
+      { AttributeName: "SK", AttributeType: "S" },
+    ],
+  },
 ];
 
 export async function createAllTables(): Promise<void> {
@@ -185,7 +198,7 @@ export async function createAllTables(): Promise<void> {
       new CreateTableCommand({
         ...def,
         BillingMode: "PAY_PER_REQUEST",
-      })
+      }),
     );
   }
 }
@@ -203,7 +216,7 @@ export async function deleteAllTables(): Promise<void> {
 
 export async function clearTable(
   tableName: string,
-  keys: string[] = ["PK", "SK"]
+  keys: string[] = ["PK", "SK"],
 ): Promise<void> {
   const ddb = DynamoDBDocumentClient.from(dynamoClient());
   const projection = keys.join(", ");
@@ -215,7 +228,7 @@ export async function clearTable(
         TableName: tableName,
         ProjectionExpression: projection,
         ExclusiveStartKey: lastKey,
-      })
+      }),
     );
 
     if (scan.Items?.length) {
@@ -226,9 +239,9 @@ export async function clearTable(
             key[k] = item[k];
           }
           return ddb.send(
-            new DeleteCommand({ TableName: tableName, Key: key })
+            new DeleteCommand({ TableName: tableName, Key: key }),
           );
-        })
+        }),
       );
     }
 
@@ -248,11 +261,11 @@ export async function createSnsTopic(name: string): Promise<string> {
  */
 export async function createQueueSubscribedToSns(
   queueName: string,
-  topicArn: string
+  topicArn: string,
 ): Promise<string> {
   const sqs = sqsClient();
   const createResult = await sqs.send(
-    new CreateQueueCommand({ QueueName: queueName })
+    new CreateQueueCommand({ QueueName: queueName }),
   );
   const queueUrl = createResult.QueueUrl!;
 
@@ -260,7 +273,7 @@ export async function createQueueSubscribedToSns(
     new GetQueueAttributesCommand({
       QueueUrl: queueUrl,
       AttributeNames: ["QueueArn"],
-    })
+    }),
   );
   const queueArn = attrs.Attributes?.QueueArn;
   if (!queueArn) throw new Error("Failed to get queue ARN");
@@ -281,7 +294,7 @@ export async function createQueueSubscribedToSns(
     new SetQueueAttributesCommand({
       QueueUrl: queueUrl,
       Attributes: { Policy: JSON.stringify(policy) },
-    })
+    }),
   );
 
   const sns = snsClient();
@@ -290,7 +303,7 @@ export async function createQueueSubscribedToSns(
       TopicArn: topicArn,
       Protocol: "sqs",
       Endpoint: queueArn,
-    })
+    }),
   );
 
   return queueUrl;
@@ -299,7 +312,7 @@ export async function createQueueSubscribedToSns(
 /** Poll the queue for one message (SNS-wrapped), unwrap and return body; null if none within timeoutMs. */
 export async function receiveOneMessageFromQueue<T = unknown>(
   queueUrl: string,
-  timeoutMs: number = 15000
+  timeoutMs: number = 15000,
 ): Promise<{ body: T } | null> {
   const sqs = sqsClient();
   const deadline = Date.now() + timeoutMs;
@@ -312,7 +325,7 @@ export async function receiveOneMessageFromQueue<T = unknown>(
         MaxNumberOfMessages: 1,
         WaitTimeSeconds: Math.min(waitSeconds, 20),
         VisibilityTimeout: 30,
-      })
+      }),
     );
 
     const messages = result.Messages ?? [];
@@ -323,7 +336,7 @@ export async function receiveOneMessageFromQueue<T = unknown>(
       new DeleteMessageCommand({
         QueueUrl: queueUrl,
         ReceiptHandle: msg.ReceiptHandle!,
-      })
+      }),
     );
 
     let body: T;
@@ -365,9 +378,11 @@ export async function drainAllMessagesFromQueue(
   return bodies;
 }
 
-export function setTestEnvVars(overrides: {
-  billingEventsTopicArn?: string;
-} = {}): void {
+export function setTestEnvVars(
+  overrides: {
+    billingEventsTopicArn?: string;
+  } = {},
+): void {
   process.env.PRODUCTS_TABLE = "products-test";
   process.env.PRICES_TABLE = "prices-test";
   process.env.ENTITLEMENTS_TABLE = "entitlements-test";
@@ -382,6 +397,7 @@ export function setTestEnvVars(overrides: {
   process.env.ENVIRONMENT = "test";
   process.env.AWS_REGION = "us-east-1";
   process.env.NODE_ENV = "test";
+  process.env.USAGE_LOGS_TABLE = "usage-logs-test";
 }
 
 export const TABLE_NAMES = {
@@ -393,4 +409,5 @@ export const TABLE_NAMES = {
   trials: "trials-test",
   processedEvents: "processed-events-test",
   productPurchaseIntent: "product-purchase-intent-test",
+  usageLogs: "usage-logs-test",
 };
