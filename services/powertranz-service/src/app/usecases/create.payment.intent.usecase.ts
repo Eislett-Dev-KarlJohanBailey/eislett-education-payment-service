@@ -4,6 +4,7 @@ import {
   BillingType,
   ProductType,
 } from "@libs/domain";
+import { PowerTranzClient } from "../../infrastructure/powertranz.client";
 
 export interface CreatePowerTranzPaymentIntentInput {
   userId: string;
@@ -11,7 +12,8 @@ export interface CreatePowerTranzPaymentIntentInput {
 }
 
 export interface CreatePowerTranzPaymentIntentOutput {
-  hppUrl: string;
+  hppHtml?: string;
+  redirectData?: string;
   expiresAt: string;
   amount: number;
   currency: string;
@@ -23,12 +25,12 @@ export class CreatePaymentIntentUseCase {
   constructor(
     private readonly getPriceUseCase: GetPriceUseCase,
     private readonly getProductUseCase: GetProductUseCase,
-    private readonly powerTranzClient: any, // replace with actual PowerTranz client type when instructure is implemented
+    private readonly powerTranzClient: PowerTranzClient,
     private readonly paymentIntentRepo: any, // replace with actual repository type ^
   ) {}
 
   async execute(
-    input: CreatePaymentIntentUseCaseInput,
+    input: CreatePowerTranzPaymentIntentInput,
   ): Promise<CreatePowerTranzPaymentIntentOutput> {
     const price = await this.getPriceUseCase.execute(input.priceId);
     const product = await this.getProductUseCase.execute(price.productId);
@@ -45,41 +47,24 @@ export class CreatePaymentIntentUseCase {
       throw new Error("Must be a one time purchase product");
     }
 
-    const spiToken = await this.powerTranzClient.createSpiToken();
-    const expiresAt = this.makeExpiryDate();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    const hpp = await this.powerTranzClient.createHpp({
-      spiToken,
-      amount: price.amount,
-      currency: price.currency,
-      productName: product.name,
-      userId: input.userId,
-      priceId: input.priceId,
-      productId: price.productId,
-    });
-
-    await this.paymentIntentRepo.save({
-      userId: input.userId,
-      priceId: input.priceId,
-      productId: product.productId,
-      spiToken,
-      status: "pending_payment",
-      expiresAt,
-      createdAt: new Date(),
+    const auth = await this.powerTranzClient.createSpiToken({
+      Amount: price.amount,
+      CurrencyCode: price.currency,
+      CustomerReference: input.userId,
+      ProductReference: input.priceId,
+      ProductName: product.name,
     });
 
     return {
-      hppUrl: hpp.url,
+      hppHtml: auth.hppHtml,
+      redirectData: auth.redirectData,
       expiresAt: expiresAt.toISOString(),
       amount: price.amount,
       currency: price.currency,
       priceId: input.priceId,
       productId: price.productId,
     };
-  }
-
-  private makeExpiryDate(): Date {
-    const minutes = 10;
-    return new Date(Date.now() + minutes * 60 * 1000);
   }
 }
