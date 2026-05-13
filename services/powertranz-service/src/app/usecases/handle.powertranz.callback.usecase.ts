@@ -8,9 +8,7 @@ import {
 
 export interface HandlePowerTranzCallbackInput {
   spiToken: string;
-  status: "success" | "failed";
-  transactionId?: string;
-  rawPayload: unknown;
+  rawPayload: Record<string, unknown>;
 }
 
 export class HandlePowerTranzCallbackUseCase {

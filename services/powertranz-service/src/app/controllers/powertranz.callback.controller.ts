@@ -1,4 +1,6 @@
 import { RequestContext } from "../../handler/api-gateway/types";
+import { ForbiddenError, BadRequestError } from "@libs/domain";
+import config from "../../config";
 import { HandlePowerTranzCallbackUseCase } from "../usecases/handle.powertranz.callback.usecase";
 
 export class PowerTranzCallbackController {
@@ -6,16 +8,29 @@ export class PowerTranzCallbackController {
   constructor(private readonly useCase: HandlePowerTranzCallbackUseCase) {}
 
   handle = async (req: RequestContext) => {
-    const payload = req.body;
+    const headerSecret = req.headers?.["x-powertranz-callback-secret"];
 
-    if (!payload || typeof payload !== "object") {
-      const error = new Error("Invalid payload");
-      error.name = "ValidationError";
-      throw error;
+    if (
+      config.powertranz.callbackSecret &&
+      headerSecret !== config.powertranz.callbackSecret
+    ) {
+      throw new ForbiddenError("Forbidden");
     }
 
-    return await this.useCase.execute({
-      payload,
+    if (!req.body || typeof req.body !== "object") {
+      throw new BadRequestError("Invalid payload");
+    }
+
+    const spiToken = String((req.body as any).spi_token || "").trim();
+    if (!spiToken) {
+      throw new BadRequestError("spi_token is required in payload");
+    }
+
+    await this.useCase.execute({
+      spiToken,
+      rawPayload: req.body as Record<string, unknown>,
     });
+
+    return { ok: true };
   };
 }
