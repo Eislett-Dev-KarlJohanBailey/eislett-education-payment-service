@@ -3,6 +3,8 @@ import { CreatePaymentIntentController } from "./app/controllers/create.payment.
 import { CreatePaymentIntentUseCase } from "./app/usecases/create.payment.intent.usecase";
 import { PowerTranzClient } from "./infrastructure/powertranz.client";
 import { DynamoPowerTranzIntentRepository } from "./infrastructure/dynamo.powertranz-intent.repository";
+import { PowerTranzCallbackController } from "./app/controllers/powertranz.callback.controller";
+import { HandlePowerTranzCallbackUseCase } from "./app/usecases/handle.powertranz.callback.usecase";
 import {
   GetPriceUseCase,
   GetProductUseCase,
@@ -28,11 +30,21 @@ export function bootstrap() {
     paymentIntentRepo,
   );
 
+  const handlePowerTranzCallbackUseCase = new HandlePowerTranzCallbackUseCase(
+    powerTranzClient,
+    paymentIntentRepo,
+  );
+
   const createPaymentIntentController = new CreatePaymentIntentController(
     createPaymentIntentUseCase,
   );
+  const powerTranzCallbackController = new PowerTranzCallbackController(
+    handlePowerTranzCallbackUseCase,
+  );
+
   return {
     healthController,
     createPaymentIntentController,
+    powerTranzCallbackController,
   };
 }

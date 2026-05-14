@@ -21,6 +21,7 @@ export class CreatePaymentIntentController {
 
     return this.useCase.execute({
       userId: req.user.id,
+      userEmail: req.user.email,
       priceId,
     });
   };

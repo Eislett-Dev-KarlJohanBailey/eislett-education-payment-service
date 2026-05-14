@@ -13,6 +13,7 @@ import { randomUUID } from "crypto";
 
 export interface CreatePowerTranzPaymentIntentInput {
   userId: string;
+  userEmail?: string;
   priceId: string;
 }
 
@@ -65,6 +66,7 @@ export class CreatePaymentIntentUseCase {
     const intent: PowerTranzPaymentIntent = {
       id: randomUUID(),
       userId: input.userId,
+      userEmail: input.userEmail,
       priceId: input.priceId,
       productId: price.productId,
       spiToken: auth.spiToken,
@@ -75,7 +77,7 @@ export class CreatePaymentIntentUseCase {
       createdAt: new Date().toISOString(),
     };
 
-    await this.intentRepo.save(intent);
+    await this.paymentIntentRepo.save(intent);
 
     return {
       hppHtml: auth.hppHtml,

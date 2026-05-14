@@ -1,12 +1,11 @@
-import {
-  BillingEvent,
-  CreateEntitlementUseCase,
-  SyncProductLimitsToEntitlementsUseCase,
-  EntitlementRepository,
-  ProductRepositoryPorts,
-} from "@libs/domain";
+import { BillingEvent, Transaction, TransactionRepository } from "@libs/domain";
 import { PowerTranzIntentRepository } from "../../infrastructure/powertranz.intent.repository";
 import { PowerTranzClient } from "../../infrastructure/powertranz.client";
+import {
+  PowerTranzBillingEventPublisher,
+  PowerTranzEmailQueue,
+} from "../../infrastructure/powertranz.callback.effects";
+import { randomUUID } from "node:crypto";
 
 export interface HandlePowerTranzCallbackInput {
   spiToken: string;
@@ -17,6 +16,9 @@ export class HandlePowerTranzCallbackUseCase {
   constructor(
     private readonly powerTranzClient: PowerTranzClient,
     private readonly paymentIntentRepo: PowerTranzIntentRepository,
+    private readonly emailQueue: PowerTranzEmailQueue,
+    private readonly billingEventPublisher: PowerTranzBillingEventPublisher,
+    private readonly transactionRepo: TransactionRepository,
   ) {}
 
   async execute(input: HandlePowerTranzCallbackInput): Promise<void> {
@@ -31,25 +33,118 @@ export class HandlePowerTranzCallbackUseCase {
       return;
     }
 
-    const paymentResult = await this.powerTranzClient.chargePayment(
-      input.spiToken,
-    );
+    let paymentResult: unknown;
 
-    const iso = String((paymentResult as any)?.IsoResponseCode ?? ""); // checks if payment was approved, "00" means approved in PowerTranz
-    const approved = iso === "00";
-
-    if (!approved) {
+    try {
+      paymentResult = await this.powerTranzClient.chargePayment(input.spiToken);
+    } catch (error) {
       await this.paymentIntentRepo.updateById(intent.id, {
         status: "failed",
       });
+
+      if (intent.userEmail) {
+        await this.emailQueue.send({
+          template: "payment-failed.hbs",
+          header: "Payment failed",
+          to: intent.userEmail,
+          content: {
+            amount: intent.amount,
+            currency: intent.currency,
+            priceId: intent.priceId,
+            productId: intent.productId,
+            failureReason:
+              error instanceof Error ? error.message : "PowerTranz failed",
+          },
+        });
+      }
+
       return;
     }
 
+    const iso = String(
+      (paymentResult as { IsoResponseCode?: string }).IsoResponseCode ?? "",
+    ); // checks if payment was approved, "00" means approved in PowerTranz
+
+    if (iso !== "00") {
+      await this.paymentIntentRepo.updateById(intent.id, {
+        status: "failed",
+      });
+
+      if (intent.userEmail) {
+        await this.emailQueue.send({
+          template: "payment-failed.hbs",
+          header: "Payment failed",
+          to: intent.userEmail,
+          content: {
+            amount: intent.amount,
+            currency: intent.currency,
+            priceId: intent.priceId,
+            productId: intent.productId,
+            failureCode: iso,
+            failureReason: String(
+              (paymentResult as { ResponseMessage?: string }).ResponseMessage ??
+                "Payment failed",
+            ),
+          },
+        });
+      }
+
+      return;
+    }
+
+    const transactionId =
+      String(
+        (paymentResult as { TransactionIdentifier?: string })
+          .TransactionIdentifier ?? "",
+      ).trim() || input.spiToken;
+
     await this.paymentIntentRepo.updateById(intent.id, {
       status: "completed",
-      transactionId: String(
-        (paymentResult as any)?.TransactionIdentifier ?? "",
-      ),
+      transactionId,
     });
+
+    const billingEvent: BillingEvent.PaymentSuccessfulEvent = {
+      type: BillingEvent.PaymentEventType.PAYMENT_SUCCESSFUL,
+      version: 1,
+      meta: {
+        eventId: randomUUID(),
+        occurredAt: new Date().toISOString(),
+        source: "powertranz",
+      },
+      payload: {
+        paymentIntentId: intent.id,
+        userId: intent.userId,
+        amount: intent.amount,
+        currency: intent.currency,
+        priceId: intent.priceId,
+        productId: intent.productId,
+        provider: "powertranz",
+        billingType: "one_time",
+      },
+    };
+
+    const transaction = Transaction.fromBillingEvent(
+      billingEvent.type,
+      billingEvent.payload,
+      billingEvent.meta.eventId,
+    );
+
+    await this.transactionRepo.save(transaction);
+    await this.billingEventPublisher.publish(billingEvent);
+
+    if (intent.userEmail) {
+      await this.emailQueue.send({
+        template: "payment-successful.hbs",
+        header: "Payment successful",
+        to: intent.userEmail,
+        content: {
+          amount: intent.amount,
+          currency: intent.currency,
+          priceId: intent.priceId,
+          productId: intent.productId,
+          transactionId: transaction.transactionId,
+        },
+      });
+    }
   }
 }

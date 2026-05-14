@@ -7,6 +7,7 @@ export type PowerTranzIntentStatus =
 export interface PowerTranzPaymentIntent {
   id: string;
   userId: string;
+  userEmail?: string;
   priceId: string;
   productId: string;
   spiToken: string;
