@@ -2,6 +2,12 @@ import config from "../config";
 
 type FetchLike = typeof fetch;
 
+interface PaymentResponse {
+  SpiToken?: string;
+  Html?: string;
+  RedirectData?: unknown;
+}
+
 export class PowerTranzClient {
   constructor(
     private readonly baseUrl: string = config.powertranz.baseUrl,
@@ -41,7 +47,7 @@ export class PowerTranzClient {
   async createSpiToken(payload: Record<string, unknown>): Promise<{
     spiToken: string;
     hppHtml?: string;
-    redirectData?: string;
+    redirectData?: unknown;
   }> {
     const res = await this.fetchImpl(this.url("/api/spi/auth"), {
       method: "POST",
@@ -55,15 +61,17 @@ export class PowerTranzClient {
       throw new Error(`PowerTranz auth failed: ${res.status}`);
     }
 
-    const spiToken = String((raw as any)?.SpiToken ?? "").trim();
+    const response = raw as PaymentResponse;
+
+    const spiToken = String(response.SpiToken ?? "").trim();
     if (!spiToken) {
       throw new Error("PowerTranz auth response missing SpiToken");
     }
 
     return {
       spiToken,
-      hppHtml: (raw as any)?.Html,
-      redirectData: (raw as any)?.RedirectData,
+      hppHtml: response.Html,
+      redirectData: response.RedirectData,
     };
   }
 

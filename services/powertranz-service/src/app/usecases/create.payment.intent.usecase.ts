@@ -5,6 +5,11 @@ import {
   ProductType,
 } from "@libs/domain";
 import { PowerTranzClient } from "../../infrastructure/powertranz.client";
+import {
+  PowerTranzIntentRepository,
+  PowerTranzPaymentIntent,
+} from "../../infrastructure/powertranz.intent.repository";
+import { randomUUID } from "crypto";
 
 export interface CreatePowerTranzPaymentIntentInput {
   userId: string;
@@ -13,7 +18,7 @@ export interface CreatePowerTranzPaymentIntentInput {
 
 export interface CreatePowerTranzPaymentIntentOutput {
   hppHtml?: string;
-  redirectData?: string;
+  redirectData?: unknown;
   expiresAt: string;
   amount: number;
   currency: string;
@@ -26,7 +31,7 @@ export class CreatePaymentIntentUseCase {
     private readonly getPriceUseCase: GetPriceUseCase,
     private readonly getProductUseCase: GetProductUseCase,
     private readonly powerTranzClient: PowerTranzClient,
-    private readonly paymentIntentRepo: any, // replace with actual repository type ^
+    private readonly paymentIntentRepo: PowerTranzIntentRepository,
   ) {}
 
   async execute(
@@ -56,6 +61,21 @@ export class CreatePaymentIntentUseCase {
       ProductReference: input.priceId,
       ProductName: product.name,
     });
+
+    const intent: PowerTranzPaymentIntent = {
+      id: randomUUID(),
+      userId: input.userId,
+      priceId: input.priceId,
+      productId: price.productId,
+      spiToken: auth.spiToken,
+      amount: price.amount,
+      currency: price.currency,
+      status: "pending_payment",
+      expiresAt: expiresAt.toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+
+    await this.intentRepo.save(intent);
 
     return {
       hppHtml: auth.hppHtml,
