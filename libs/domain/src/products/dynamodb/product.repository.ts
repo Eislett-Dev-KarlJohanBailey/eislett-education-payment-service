@@ -14,6 +14,90 @@ import { ProductType } from "../domain/value-objects/product-type.vo";
 import { ProductListFilters } from "../app/ports/product.repository.port";
 import { Pagination } from "../app/ports/product.repository.port";
 import { PaginatedResult } from "../app/ports/product.repository.port";
+import crypto from "crypto";
+
+interface ProductTargetingContext {
+  userId?: string;
+  country?: string;
+  ipAddress?: string;
+  entitlementKey?: string;
+}
+
+function hashToPercentage(input: string): number {
+  const hash = crypto.createHash("md5").update(input).digest("hex");
+  const num = parseInt(hash.slice(0, 8), 16);
+  return num % 100;
+}
+
+function isIpInCidr(ip: string, cidr: string): boolean {
+  try {
+    if (cidr.includes(".") && ip.includes(".")) {
+      return isIpv4InCidr(ip, cidr);
+    }
+
+    if (cidr.includes(":") && ip.includes(":")) {
+      return isIpv6InCidr(ip, cidr);
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function isIpInCidrList(ip: string, cidrList: string[]): boolean {
+  return cidrList.some((cidr) => isIpInCidr(ip, cidr));
+}
+
+function productMatchesTargeting(
+  product: Product,
+  context: ProductTargetingContext,
+): boolean {
+  const targeting = product.targeting;
+  if (!targeting) {
+    return true;
+  }
+
+  if (targeting.countries && targeting.countries.length > 0) {
+    if (!context.country) {
+      return false;
+    }
+
+    const requestCountry = context.country.trim().toUpperCase();
+    const allowedCountries = targeting.countries
+      .map((country) => country.trim().toUpperCase())
+      .filter(Boolean);
+
+    if (!allowedCountries.includes(requestCountry)) {
+      return false;
+    }
+  }
+
+  if (targeting.percentage !== undefined && targeting.percentage !== null) {
+    if (!context.userId) {
+      return false;
+    }
+
+    const salt = context.entitlementKey || product.productId;
+    const bucket = hashToPercentage(`${context.userId}${salt}`);
+
+    if (bucket >= targeting.percentage) {
+      return false;
+    }
+  }
+
+  if (targeting.cidrBlocks && targeting.cidrBlocks.length > 0) {
+    if (!context.ipAddress) {
+      return false;
+    }
+
+    if (!isIpInCidrList(context.ipAddress, targeting.cidrBlocks)) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 export class DynamoProductRepository implements ProductRepository {
   private readonly tableName: string;
@@ -131,6 +215,15 @@ export class DynamoProductRepository implements ProductRepository {
       lastEvaluatedKey = result.LastEvaluatedKey;
 
       let batch = (result.Items ?? []).map(ProductMapper.toDomain);
+
+      batch = batch.filter((product) =>
+        productMatchesTargeting(product, {
+          userId: filters.userId,
+          country: filters.country,
+          ipAddress: filters.ipAddress,
+          entitlementKey: filters.entitlementKey,
+        }),
+      );
 
       // Filter by namePrefix if provided (client-side filtering since begins_with can't be used in FilterExpression)
       if (filters.namePrefix) {
