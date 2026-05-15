@@ -18,7 +18,11 @@ export interface ProductProps {
   addonConfigs?: AddonConfig[]; // Enhanced add-on configuration
 
   providers?: Record<string, string>; // provider name -> providerId (e.g., "stripe" -> "prod_xxx", "paypal" -> "PP-xxx")
-
+  targeting?: {
+    countries?: string[]; // ISO country codes
+    percentage?: number; // 0-100 for percentage-based targeting
+    cidrBlocks?: string[]; // For IP-based targeting
+  };
   isActive: boolean;
 
   createdAt: Date;
@@ -35,6 +39,11 @@ export class Product {
   private _addons: string[];
   private _addonConfigs: AddonConfig[];
   private _providers: Record<string, string>;
+  private _targeting?: {
+    countries?: string[];
+    percentage?: number;
+    cidrBlocks?: string[];
+  };
   private _isActive: boolean;
   private _createdAt: Date;
   private _updatedAt: Date;
@@ -52,7 +61,7 @@ export class Product {
     this._isActive = props.isActive;
     this._createdAt = props.createdAt;
     this._updatedAt = props.updatedAt;
-
+    this._targeting = props.targeting;
     this.validate();
   }
 
@@ -102,6 +111,10 @@ export class Product {
 
   get providers(): Record<string, string> {
     return { ...this._providers };
+  }
+
+  get targeting() {
+    return this._targeting ? { ...this._targeting } : undefined;
   }
 
   get isActive(): boolean {
@@ -301,6 +314,15 @@ export class Product {
 
     if (this._entitlements.length === 0) {
       throw new DomainError("Product must define at least one entitlement");
+    }
+
+    if (
+      this._targeting?.percentage !== undefined && // added percentage validation
+      (this._targeting.percentage < 0 || this._targeting.percentage > 100)
+    ) {
+      throw new DomainError(
+        "Product targeting percentage must be between 0 and 100",
+      );
     }
 
     const invalidUsageMetrics = this._usageLimits // added invalid usage limits check
