@@ -10,6 +10,7 @@ import {
   PowerTranzPaymentIntent,
 } from "../../infrastructure/powertranz.intent.repository";
 import { randomUUID } from "crypto";
+import { BadRequestError } from "../errors/bad-request.error";
 
 export interface CreatePowerTranzPaymentIntentInput {
   userId: string;
@@ -42,15 +43,15 @@ export class CreatePaymentIntentUseCase {
     const product = await this.getProductUseCase.execute(price.productId);
 
     if (!["USD", "TTD"].includes(price.currency.toUpperCase())) {
-      throw new Error("Invalid currency");
+      throw new BadRequestError("Only USD and TTD are supported");
     }
 
     if (price.billingType !== BillingType.ONE_TIME) {
-      throw new Error("Only one time paymnents are supported for now");
+      throw new BadRequestError("Only one time payments are supported for now");
     }
 
     if (product.type !== ProductType.ONE_OFF) {
-      throw new Error("Must be a one time purchase product");
+      throw new BadRequestError("Must be a one time purchase product");
     }
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
