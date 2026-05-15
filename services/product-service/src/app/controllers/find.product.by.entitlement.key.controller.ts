@@ -1,5 +1,6 @@
 import { RequestContext } from "../../handler/api-gateway/types";
 import { FindProductByEntitlementKeyUseCase } from "@libs/domain";
+import { buildProductRequestContext } from "../utils/product-targeting-context";
 
 export class FindProductByEntitlementKeyController {
   constructor(private readonly useCase: FindProductByEntitlementKeyUseCase) {}
@@ -23,7 +24,13 @@ export class FindProductByEntitlementKeyController {
     // entitlementKey = entitlementKey.replace(/-/g, "_");
     entitlementKey = entitlementKey.trim().toLowerCase(); // lowercase and trim to ensure consistent matching
 
-    const products = await this.useCase.execute(entitlementKey);
+    const targetingContext = buildProductRequestContext(req, entitlementKey);
+
+    const products = await this.useCase.execute(
+      entitlementKey,
+      targetingContext,
+    );
+
     return {
       amount: products.length,
       data: products,
