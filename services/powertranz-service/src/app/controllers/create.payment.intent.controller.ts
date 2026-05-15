@@ -1,5 +1,6 @@
-import { AuthenticationError, BadRequestError } from "@libs/domain";
+import { AuthenticationError } from "@libs/domain";
 import { RequestContext } from "../../handler/api-gateway/types";
+import { BadRequestError } from "../errors/bad-request.error";
 import { CreatePaymentIntentUseCase } from "../usecases/create.payment.intent.usecase";
 export class CreatePaymentIntentController {
   // for creating a payment intent, ensuring thete is jwt and price_id and then sends it to the usecase

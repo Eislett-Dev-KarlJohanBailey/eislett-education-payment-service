@@ -1,7 +1,8 @@
 import { RequestContext } from "../../handler/api-gateway/types";
-import { ForbiddenError, BadRequestError } from "@libs/domain";
+import { ForbiddenError } from "@libs/domain";
 import config from "../../config";
 import { HandlePowerTranzCallbackUseCase } from "../usecases/handle.powertranz.callback.usecase";
+import { BadRequestError } from "../errors/bad-request.error";
 
 export class PowerTranzCallbackController {
   // for accepting the powertranz callback payload and then sends it to the usecase
@@ -21,9 +22,9 @@ export class PowerTranzCallbackController {
       throw new BadRequestError("Invalid payload");
     }
 
-    const spiToken = String((req.body as any).spi_token || "").trim();
+    const spiToken = String((req.body as any).SpiToken || "").trim();
     if (!spiToken) {
-      throw new BadRequestError("spi_token is required in payload");
+      throw new BadRequestError("SpiToken is required in payload");
     }
 
     await this.useCase.execute({

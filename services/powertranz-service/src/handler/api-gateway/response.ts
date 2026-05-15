@@ -1,5 +1,4 @@
 import { APIGatewayProxyResult } from "aws-lambda";
-import { console } from "inspector/promises";
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
