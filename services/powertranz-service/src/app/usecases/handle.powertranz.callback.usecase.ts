@@ -33,6 +33,55 @@ export class HandlePowerTranzCallbackUseCase {
       return;
     }
 
+    const riskManagement = input.rawPayload.RiskManagement as
+      | Record<string, unknown>
+      | undefined;
+
+    const threeDSecure = riskManagement?.["ThreeDSecure"] as
+      | Record<string, unknown>
+      | undefined;
+
+    const authStatus = String(
+      input.rawPayload.AuthenticationStatus ??
+        threeDSecure?.AuthenticationStatus ??
+        "",
+    )
+      .trim()
+      .toUpperCase();
+
+    const authIso = String(
+      input.rawPayload.IsoResponseCode ?? threeDSecure?.ResponseCode ?? "",
+    )
+      .trim()
+      .toUpperCase();
+
+    const hasThreeDsSignal = authStatus.length > 0 || authIso.length > 0;
+    const threeDsApproved =
+      authIso === "HP0" || (authStatus === "Y" && authIso === "3D0");
+
+    if (hasThreeDsSignal && !threeDsApproved) {
+      await this.paymentIntentRepo.updateById(intent.id, {
+        status: "failed",
+      });
+
+      if (intent.userEmail) {
+        await this.emailQueue.send({
+          template: "payment-failed.hbs",
+          header: "Payment failed",
+          to: intent.userEmail,
+          content: {
+            amount: intent.amount,
+            currency: intent.currency,
+            priceId: intent.priceId,
+            productId: intent.productId,
+            failureReason: "3DS authentication failed",
+          },
+        });
+      }
+
+      return;
+    }
+
     let paymentResult: unknown;
 
     try {
