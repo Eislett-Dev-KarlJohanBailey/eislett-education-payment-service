@@ -1,6 +1,15 @@
-import "dotenv/config";
+export interface PowerTranzConfig {
+  baseUrl: string;
+  merchantId: string;
+  merchantPassword: string;
+  callbackSecret: string;
+}
 
-export default {
+export interface PowerTranzServiceConfig {
+  powertranz: PowerTranzConfig;
+}
+
+const config: PowerTranzServiceConfig = {
   powertranz: {
     baseUrl: process.env.POWERTRANZ_BASE_URL || "",
     merchantId: process.env.POWERTRANZ_MERCHANT_ID || "",
@@ -8,3 +17,5 @@ export default {
     callbackSecret: process.env.POWERTRANZ_CALLBACK_SECRET || "",
   },
 };
+
+export default config;

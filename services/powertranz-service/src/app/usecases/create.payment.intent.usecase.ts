@@ -42,7 +42,7 @@ export class CreatePaymentIntentUseCase {
     const price = await this.getPriceUseCase.execute(input.priceId);
     const product = await this.getProductUseCase.execute(price.productId);
 
-    if (!["USD", "TTD"].includes(price.currency.toUpperCase())) {
+    if (!["USD"].includes(price.currency.toUpperCase())) {
       throw new BadRequestError("Only USD and TTD are supported");
     }
 
