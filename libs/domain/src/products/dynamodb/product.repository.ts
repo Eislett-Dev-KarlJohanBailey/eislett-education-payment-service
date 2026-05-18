@@ -29,6 +29,128 @@ function hashToPercentage(input: string): number {
   return num % 100;
 }
 
+function parseIpv4(ip: string): number | null {
+  const parts = ip.trim().split(".");
+  if (parts.length !== 4) return null;
+
+  const nums = parts.map((part) => {
+    const n = Number(part);
+    return Number.isInteger(n) && n >= 0 && n <= 255 ? n : NaN;
+  });
+
+  if (nums.some((n) => Number.isNaN(n))) return null;
+
+  return (((nums[0] * 256 + nums[1]) * 256 + nums[2]) * 256 + nums[3]) >>> 0;
+}
+
+function parseIpv4Cidr(cidr: string): { network: number; mask: number } | null {
+  const [ip, prefixRaw] = cidr.trim().split("/");
+
+  if (!ip || prefixRaw === undefined) return null;
+
+  const prefix = Number(prefixRaw);
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) return null;
+
+  const baseIp = parseIpv4(ip);
+  if (baseIp === null) return null;
+
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  const network = baseIp & mask;
+
+  return { network, mask };
+}
+
+function isIpv4InCidr(ip: string, cidr: string): boolean {
+  const parsedIp = parseIpv4(ip);
+  const parsedCidr = parseIpv4Cidr(cidr);
+  if (parsedIp === null || parsedCidr === null) return false;
+
+  return (parsedIp & parsedCidr.mask) === parsedCidr.network;
+}
+
+function expandIpv6(ip: string): string[] | null {
+  const value = ip.trim().toLowerCase();
+
+  if (!value) return null;
+
+  const hasIpv4Tail = value.includes(".");
+  let working = value;
+  let ipv4Tail: string[] = [];
+
+  if (hasIpv4Tail) {
+    const lastColon = working.lastIndexOf(":");
+    if (lastColon < 0) return null;
+
+    const tail = working.slice(lastColon + 1);
+    const ipv4 = parseIpv4(tail);
+    if (ipv4 === null) return null;
+
+    const high = (ipv4 >>> 16) & 0xffff;
+    const low = ipv4 & 0xffff;
+    ipv4Tail = [high.toString(16), low.toString(16)];
+    working = working.slice(0, lastColon);
+  }
+
+  const scetions = working.split("::");
+  if (scetions.length > 2) return null;
+
+  const left = scetions[0] ? scetions[0].split(":").filter(Boolean) : [];
+  const right = scetions[1] ? scetions[1].split(":").filter(Boolean) : [];
+
+  const totalNeeded = 8 - ipv4Tail.length;
+  const missing = totalNeeded - (left.length + right.length);
+  if (missing < 0) return null;
+
+  const parts = [...left, ...Array(missing).fill("0"), ...right, ...ipv4Tail];
+  if (parts.length !== 8) return null;
+
+  return parts.map((part) => {
+    if (!/^[0-9a-f]{1,4}$/.test(part)) return null as any;
+    return part.padStart(4, "0");
+  });
+}
+
+function ipv6ToBigInt(ip: string): bigint | null {
+  const parts = expandIpv6(ip);
+  if (!parts) return null;
+
+  try {
+    let result = 0n;
+    for (const part of parts) {
+      const value = BigInt(`0x${part}`);
+      result = (result << 16n) + value;
+    }
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+function parseIpv6Cidr(cidr: string): { network: bigint; mask: bigint } | null {
+  const [ip, prefixRaw] = cidr.trim().split("/");
+  if (!ip || prefixRaw === undefined) return null;
+
+  const prefix = Number(prefixRaw);
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 128) return null;
+
+  const baseIp = ipv6ToBigInt(ip);
+  if (baseIp === null) return null;
+
+  const mask =
+    prefix === 0 ? 0n : ((1n << BigInt(prefix)) - 1n) << BigInt(128 - prefix);
+
+  const network = baseIp & mask;
+  return { network, mask };
+}
+
+function isIpv6InCidr(ip: string, cidr: string): boolean {
+  const parsedIp = ipv6ToBigInt(ip);
+  const parsedCidr = parseIpv6Cidr(cidr);
+  if (parsedIp === null || parsedCidr === null) return false;
+
+  return (parsedIp & parsedCidr.mask) === parsedCidr.network;
+}
+
 function isIpInCidr(ip: string, cidr: string): boolean {
   try {
     if (cidr.includes(".") && ip.includes(".")) {
