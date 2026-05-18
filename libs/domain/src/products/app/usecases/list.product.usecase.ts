@@ -10,6 +10,9 @@ export class ListProductsUseCase {
     type?: ProductType;
     isActive?: boolean;
     entitlementKey?: string;
+    userId?: string;
+    country?: string;
+    ipAddress?: string;
   }) {
     // Normalize entitlement_key: kebab-case in URL -> snake_case (e.g. ai-tutor-access -> ai_tutor_access)
     const entitlementKey = input.entitlementKey
@@ -33,6 +36,9 @@ export class ListProductsUseCase {
             type,
             isActive: input.isActive,
             entitlementKey,
+            userId: input.userId,
+            country: input.country,
+            ipAddress: input.ipAddress,
           }),
         ),
       );
@@ -65,6 +71,9 @@ export class ListProductsUseCase {
     type: ProductType;
     isActive?: boolean;
     entitlementKey?: string;
+    userId?: string;
+    country?: string;
+    ipAddress?: string;
   }) {
     const pageSize = 100;
     const items = [];
