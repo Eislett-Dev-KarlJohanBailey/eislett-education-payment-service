@@ -34,6 +34,7 @@ describe("ListProductsController", () => {
         page_number: "2",
         page_size: "5",
       },
+      headers: {},
       body: null,
     } as any);
 
@@ -66,6 +67,7 @@ describe("ListProductsController", () => {
       query: {
         active: "false",
       },
+      headers: {},
       body: null,
     } as any);
 
@@ -98,6 +100,7 @@ describe("ListProductsController", () => {
       query: {
         entitlement_key: "subject_access",
       },
+      headers: {},
       body: null,
     } as any);
 
@@ -130,6 +133,7 @@ describe("ListProductsController", () => {
       query: {
         entitlementKey: "token",
       },
+      headers: {},
       body: null,
     } as any);
 
@@ -151,6 +155,7 @@ describe("ListProductsController", () => {
       query: {
         entitlement_key: "",
       },
+      headers: {},
       body: null,
     } as any);
 
