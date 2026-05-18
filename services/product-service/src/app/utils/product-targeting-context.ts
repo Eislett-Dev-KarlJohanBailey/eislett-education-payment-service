@@ -10,15 +10,16 @@ export function buildProductRequestContext(
   req: RequestContext & { user?: { id?: string } },
   entitlementKey?: string,
 ): ProductTargetingContext {
+  const headers = req.headers ?? {};
   const userId = req.user?.id?.trim() || undefined;
 
   const countryHeader =
-    req.headers["cloudfront-viewer-country"] ||
-    req.headers["cloudfront-viewer-country-name"];
+    headers["cloudfront-viewer-country"] ||
+    headers["cloudfront-viewer-country-name"];
 
   const country = countryHeader?.trim().toUpperCase() || undefined;
 
-  const forwardedFor = req.headers["x-forwarded-for"];
+  const forwardedFor = headers["x-forwarded-for"];
   const ipAddress =
     forwardedFor?.split(",")[0]?.trim() || req.sourceIp?.trim() || undefined;
 

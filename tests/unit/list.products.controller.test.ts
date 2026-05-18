@@ -43,6 +43,9 @@ describe("ListProductsController", () => {
       type: undefined,
       isActive: true,
       entitlementKey: undefined,
+      userId: undefined,
+      country: undefined,
+      ipAddress: undefined,
     });
   });
 
@@ -72,6 +75,9 @@ describe("ListProductsController", () => {
       type: undefined,
       isActive: false,
       entitlementKey: undefined,
+      userId: undefined,
+      country: undefined,
+      ipAddress: undefined,
     });
   });
 
@@ -101,6 +107,9 @@ describe("ListProductsController", () => {
       type: undefined,
       isActive: undefined,
       entitlementKey: "subject_access",
+      userId: undefined,
+      country: undefined,
+      ipAddress: undefined,
     });
   });
 
@@ -130,6 +139,9 @@ describe("ListProductsController", () => {
       type: undefined,
       isActive: undefined,
       entitlementKey: "token",
+      userId: undefined,
+      country: undefined,
+      ipAddress: undefined,
     });
 
     await controller.handle({
@@ -148,6 +160,48 @@ describe("ListProductsController", () => {
       type: undefined,
       isActive: undefined,
       entitlementKey: undefined,
+      userId: undefined,
+      country: undefined,
+      ipAddress: undefined,
+    });
+  });
+
+  it("forwards userId, country, and ipAddress from request context", async () => {
+    const useCase = makeUseCase({
+      items: [{ id: "1" }],
+      total: 1,
+      pageNumber: 1,
+      pageSize: 20,
+    });
+
+    const controller = new ListProductsController(useCase as any);
+
+    await controller.handle({
+      method: "GET",
+      path: "/products",
+      pathParams: {},
+      query: {},
+      headers: {
+        "cloudfront-viewer-country": "US",
+        "x-forwarded-for": "203.0.113.10, 10.0.0.1",
+      },
+      sourceIp: "203.0.113.10",
+      user: {
+        id: "user-123",
+        role: "learner",
+      },
+      body: null,
+    } as any);
+
+    expect(useCase.execute).toHaveBeenCalledWith({
+      pageNumber: 1,
+      pageSize: 20,
+      type: undefined,
+      isActive: undefined,
+      entitlementKey: undefined,
+      userId: "user-123",
+      country: "US",
+      ipAddress: "203.0.113.10",
     });
   });
 });
