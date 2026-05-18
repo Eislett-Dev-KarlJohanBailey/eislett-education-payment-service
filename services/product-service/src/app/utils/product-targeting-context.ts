@@ -8,7 +8,6 @@ export interface ProductTargetingContext {
 
 export function buildProductRequestContext(
   req: RequestContext & { user?: { id?: string } },
-  entitlementKey?: string,
 ): ProductTargetingContext {
   const headers = req.headers ?? {};
   const userId = req.user?.id?.trim() || undefined;

@@ -15,7 +15,7 @@ export class ListProductsController {
       typeof entitlementKeyRaw === "string" && entitlementKeyRaw.trim()
         ? entitlementKeyRaw.trim()
         : undefined;
-    const targetingContext = buildProductRequestContext(req, entitlementKey);
+    const targetingContext = buildProductRequestContext(req);
 
     const result = await this.useCase.execute({
       pageNumber,

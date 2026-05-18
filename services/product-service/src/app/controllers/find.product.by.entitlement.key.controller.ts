@@ -24,7 +24,7 @@ export class FindProductByEntitlementKeyController {
     // entitlementKey = entitlementKey.replace(/-/g, "_");
     entitlementKey = entitlementKey.trim().toLowerCase(); // lowercase and trim to ensure consistent matching
 
-    const targetingContext = buildProductRequestContext(req, entitlementKey);
+    const targetingContext = buildProductRequestContext(req);
 
     const products = await this.useCase.execute(
       entitlementKey,
