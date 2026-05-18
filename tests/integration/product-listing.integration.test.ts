@@ -12,36 +12,11 @@ import {
   seedProductsForByEntitlementTests,
   seedProduct,
 } from "../helpers/product-service-seed";
+import {
+  findUserIdForBucketBelow,
+  findUserIdForBucketAtOrAbove,
+} from "../helpers/product-targeting-test-helper";
 import { ProductType } from "../../libs/domain/src/products/domain/value-objects/product-type.vo";
-import { createHash } from "node:crypto";
-
-function hashToPercentage(input: string): number {
-  const hash = createHash("md5").update(input).digest("hex");
-  const num = parseInt(hash.slice(0, 8), 16);
-  return num % 100;
-}
-
-function findUserIdForBucketBelow(threshold: number, salt: string): string {
-  for (let i = 0; i < 10000; i++) {
-    const userId = `user-${i}`;
-    if (hashToPercentage(`${userId}${salt}`) < threshold) {
-      return userId;
-    }
-  }
-
-  throw new Error(`Could not find userId for bucket < ${threshold}`);
-}
-
-function findUserIdForBucketAtOrAbove(threshold: number, salt: string): string {
-  for (let i = 0; i < 10000; i++) {
-    const userId = `user-${i}`;
-    if (hashToPercentage(`${userId}${salt}`) >= threshold) {
-      return userId;
-    }
-  }
-
-  throw new Error(`Could not find userId for bucket >= ${threshold}`);
-}
 
 describe("Product listing integration tests", () => {
   let repo: DynamoProductRepository;
