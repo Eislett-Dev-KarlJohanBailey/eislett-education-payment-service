@@ -21,30 +21,45 @@ import {
   findUserIdForBucketBelow,
   findUserIdForBucketAtOrAbove,
 } from "../helpers/product-targeting-test-helper";
+import {
+  TARGET_ENTITLEMENT_KEY,
+  ROLLOUT_PERCENTAGE,
+  TARGET_PRODUCT_IDS,
+  seedByEntitlementCountryTargetedProducts,
+  seedByEntitlementCidrTargetedProducts,
+  seedByEntitlementPercentageTargetedProduct,
+  seedCidrTargetedProducts,
+  seedCountryTargetedProducts,
+  seedPercentageTargetedProduct,
+} from "../helpers/product-targeting-seed-helper";
 
 let handler: (typeof import("../../services/product-service/src/handler/index"))["handler"];
-const TARGET_ENTITLEMENT_KEY = "subject_access";
-const ROLLOUT_PERCENTAGE = 20;
-
-const TARGET_PRODUCT_IDS = {
-  countryUs: "country-us-product",
-  countryCa: "country-ca-product",
-  percent20: "percent-20-product",
-  cidrAllowed: "cidr-allowed-product",
-  cidrDenied: "cidr-denied-product",
-  andTargeted: "and-targeted-product",
-  byEntCountryUs: "by-ent-country-us",
-  byEntCountryCa: "by-ent-country-ca",
-  byEntCidrAllowed: "by-ent-cidr-allowed",
-  byEntCidrDenied: "by-ent-cidr-denied",
-  byEntPercent20: "by-ent-percent-20",
-} as const;
 
 function makeAuthHeaders(userId = "test-user-e2e", role = "learner") {
   return {
     ...createApiGatewayEvent().headers,
     Authorization: `Bearer ${createJwtWithRole(role, userId)}`,
   };
+}
+
+type ApiGatewayEventInput = Parameters<typeof createApiGatewayEvent>[0];
+
+function makeAuthedEvent(
+  input: ApiGatewayEventInput,
+  userId = "test-user-e2e",
+  role = "learner",
+) {
+  return createApiGatewayEvent({
+    ...input,
+    headers: {
+      ...makeAuthHeaders(userId, role),
+      ...(input?.headers ?? {}),
+    },
+  });
+}
+
+function productIds(body: any): string[] {
+  return (body?.data ?? []).map((p: { productId: string }) => p.productId);
 }
 
 const matchingRolloutUserId = findUserIdForBucketBelow(
@@ -373,33 +388,14 @@ describe("Product Service E2E", () => {
     });
 
     it("filters products by CloudFront country header", async () => {
-      await seedProduct({
-        productId: TARGET_PRODUCT_IDS.countryUs,
-        name: "US Only Product",
-        entitlements: ["subject_access"],
-        targeting: {
-          countries: ["US"],
-        },
-      });
+      await seedCountryTargetedProducts();
 
-      await seedProduct({
-        productId: TARGET_PRODUCT_IDS.countryCa,
-        name: "CA Only Product",
-        entitlements: ["subject_access"],
-        targeting: {
-          countries: ["CA"],
-        },
-      });
-
-      const usEvent = createApiGatewayEvent({
+      const usEvent = makeAuthedEvent({
         httpMethod: "GET",
         path: "/products",
         resource: "/products",
         queryStringParameters: { type: "subscription" },
-        headers: {
-          ...makeAuthHeaders(),
-          "cloudfront-viewer-country": "US",
-        },
+        headers: { "cloudfront-viewer-country": "US" },
       });
 
       const usResult = await handler(usEvent);
@@ -407,22 +403,15 @@ describe("Product Service E2E", () => {
       expect(usResult.statusCode).toBe(200);
       const usBody = JSON.parse(usResult.body);
       expect(usBody.data.length).toBeGreaterThan(0);
-      expect(
-        usBody.data.map((p: { productId: string }) => p.productId),
-      ).toContain(TARGET_PRODUCT_IDS.countryUs);
-      expect(
-        usBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.countryCa);
+      expect(productIds(usBody)).toContain(TARGET_PRODUCT_IDS.countryUs);
+      expect(productIds(usBody)).not.toContain(TARGET_PRODUCT_IDS.countryCa);
 
-      const caEvent = createApiGatewayEvent({
+      const caEvent = makeAuthedEvent({
         httpMethod: "GET",
         path: "/products",
         resource: "/products",
         queryStringParameters: { type: "subscription" },
-        headers: {
-          ...makeAuthHeaders(),
-          "cloudfront-viewer-country": "CA",
-        },
+        headers: { "cloudfront-viewer-country": "CA" },
       });
 
       const caResult = await handler(caEvent);
@@ -430,129 +419,92 @@ describe("Product Service E2E", () => {
       expect(caResult.statusCode).toBe(200);
       const caBody = JSON.parse(caResult.body);
       expect(caBody.data.length).toBeGreaterThan(0);
-      expect(
-        caBody.data.map((p: { productId: string }) => p.productId),
-      ).toContain(TARGET_PRODUCT_IDS.countryCa);
-      expect(
-        caBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.countryUs);
+      expect(productIds(caBody)).toContain(TARGET_PRODUCT_IDS.countryCa);
+      expect(productIds(caBody)).not.toContain(TARGET_PRODUCT_IDS.countryUs);
     });
 
     it("filters products by user percentage rollout", async () => {
-      await seedProduct({
-        productId: TARGET_PRODUCT_IDS.percent20,
-        name: "Twenty Percent Product",
-        entitlements: ["subject_access"],
-        targeting: {
-          percentage: ROLLOUT_PERCENTAGE,
-        },
-      });
+      await seedPercentageTargetedProduct();
 
-      const matchingEvent = createApiGatewayEvent({
-        httpMethod: "GET",
-        path: "/products",
-        resource: "/products",
-        queryStringParameters: {
-          type: "subscription",
-          entitlement_key: TARGET_ENTITLEMENT_KEY,
+      const matchingEvent = makeAuthedEvent(
+        {
+          httpMethod: "GET",
+          path: "/products",
+          resource: "/products",
+          queryStringParameters: {
+            type: "subscription",
+            entitlement_key: TARGET_ENTITLEMENT_KEY,
+          },
         },
-        headers: {
-          ...makeAuthHeaders(matchingRolloutUserId),
-        },
-      });
+        matchingRolloutUserId,
+      );
 
       const matchingResult = await handler(matchingEvent);
 
       expect(matchingResult.statusCode).toBe(200);
       const matchingBody = JSON.parse(matchingResult.body);
-      expect(
-        matchingBody.data.map((p: { productId: string }) => p.productId),
-      ).toContain(TARGET_PRODUCT_IDS.percent20);
+      expect(productIds(matchingBody)).toContain(TARGET_PRODUCT_IDS.percent20);
 
-      const nonMatchingEvent = createApiGatewayEvent({
-        httpMethod: "GET",
-        path: "/products",
-        resource: "/products",
-        queryStringParameters: {
-          type: "subscription",
-          entitlement_key: TARGET_ENTITLEMENT_KEY,
+      const nonMatchingEvent = makeAuthedEvent(
+        {
+          httpMethod: "GET",
+          path: "/products",
+          resource: "/products",
+          queryStringParameters: {
+            type: "subscription",
+            entitlement_key: TARGET_ENTITLEMENT_KEY,
+          },
         },
-        headers: {
-          ...makeAuthHeaders(nonMatchingRolloutUserId),
-        },
-      });
+        nonMatchingRolloutUserId,
+      );
 
       const nonMatchingResult = await handler(nonMatchingEvent);
 
       expect(nonMatchingResult.statusCode).toBe(200);
       const nonMatchingBody = JSON.parse(nonMatchingResult.body);
-      expect(
-        nonMatchingBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.percent20);
+      expect(productIds(nonMatchingBody)).not.toContain(
+        TARGET_PRODUCT_IDS.percent20,
+      );
     });
     it("filters products by IP CIDR block", async () => {
-      await seedProduct({
-        productId: TARGET_PRODUCT_IDS.cidrAllowed,
-        name: "CIDR Allowed Product",
-        entitlements: ["subject_access"],
-        targeting: {
-          cidrBlocks: ["203.0.113.0/24"],
-        },
-      });
+      await seedCidrTargetedProducts();
 
-      await seedProduct({
-        productId: TARGET_PRODUCT_IDS.cidrDenied,
-        name: "CIDR Denied Product",
-        entitlements: ["subject_access"],
-        targeting: {
-          cidrBlocks: ["198.51.100.0/24"],
-        },
-      });
-
-      const allowedEvent = createApiGatewayEvent({
+      const allowedEvent = makeAuthedEvent({
         httpMethod: "GET",
         path: "/products",
         resource: "/products",
         queryStringParameters: {
           type: "subscription",
         },
-        headers: {
-          ...makeAuthHeaders(),
-          "x-forwarded-for": "203.0.113.10, 10.0.0.1",
-        },
+        headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1" },
       });
 
       const allowedResult = await handler(allowedEvent);
 
       expect(allowedResult.statusCode).toBe(200);
       const allowedBody = JSON.parse(allowedResult.body);
-      expect(
-        allowedBody.data.map((p: { productId: string }) => p.productId),
-      ).toContain(TARGET_PRODUCT_IDS.cidrAllowed);
-      expect(
-        allowedBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.cidrDenied);
+      expect(productIds(allowedBody)).toContain(TARGET_PRODUCT_IDS.cidrAllowed);
+      expect(productIds(allowedBody)).not.toContain(
+        TARGET_PRODUCT_IDS.cidrDenied,
+      );
 
-      const deniedEvent = createApiGatewayEvent({
+      const deniedEvent = makeAuthedEvent({
         httpMethod: "GET",
         path: "/products",
         resource: "/products",
         queryStringParameters: {
           type: "subscription",
         },
-        headers: {
-          ...makeAuthHeaders(),
-          "x-forwarded-for": "192.0.2.10, 10.0.0.1",
-        },
+        headers: { "x-forwarded-for": "192.0.2.10, 10.0.0.1" },
       });
 
       const deniedResult = await handler(deniedEvent);
 
       expect(deniedResult.statusCode).toBe(200);
       const deniedBody = JSON.parse(deniedResult.body);
-      expect(
-        deniedBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.cidrAllowed);
+      expect(productIds(deniedBody)).not.toContain(
+        TARGET_PRODUCT_IDS.cidrAllowed,
+      );
     });
     it("requires all targeting rules to pass", async () => {
       await seedProduct({
@@ -565,7 +517,7 @@ describe("Product Service E2E", () => {
         },
       });
 
-      const matchingEvent = createApiGatewayEvent({
+      const matchingEvent = makeAuthedEvent({
         httpMethod: "GET",
         path: "/products",
         resource: "/products",
@@ -573,7 +525,6 @@ describe("Product Service E2E", () => {
           type: "subscription",
         },
         headers: {
-          ...makeAuthHeaders(),
           "cloudfront-viewer-country": "US",
           "x-forwarded-for": "203.0.113.10, 10.0.0.1",
         },
@@ -583,32 +534,29 @@ describe("Product Service E2E", () => {
 
       expect(matchingResult.statusCode).toBe(200);
       const matchingBody = JSON.parse(matchingResult.body);
-      expect(
-        matchingBody.data.map((p: { productId: string }) => p.productId),
-      ).toContain(TARGET_PRODUCT_IDS.andTargeted);
+      expect(productIds(matchingBody)).toContain(
+        TARGET_PRODUCT_IDS.andTargeted,
+      );
 
-      const missingCountryEvent = createApiGatewayEvent({
+      const missingCountryEvent = makeAuthedEvent({
         httpMethod: "GET",
         path: "/products",
         resource: "/products",
         queryStringParameters: {
           type: "subscription",
         },
-        headers: {
-          ...makeAuthHeaders(),
-          "x-forwarded-for": "203.0.113.10, 10.0.0.1",
-        },
+        headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1" },
       });
 
       const missingCountryResult = await handler(missingCountryEvent);
 
       expect(missingCountryResult.statusCode).toBe(200);
       const missingCountryBody = JSON.parse(missingCountryResult.body);
-      expect(
-        missingCountryBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.andTargeted);
+      expect(productIds(missingCountryBody)).not.toContain(
+        TARGET_PRODUCT_IDS.andTargeted,
+      );
 
-      const missingIpEvent = createApiGatewayEvent({
+      const missingIpEvent = makeAuthedEvent({
         httpMethod: "GET",
         path: "/products",
         resource: "/products",
@@ -616,7 +564,6 @@ describe("Product Service E2E", () => {
           type: "subscription",
         },
         headers: {
-          ...makeAuthHeaders(),
           "cloudfront-viewer-country": "US",
           "x-forwarded-for": "192.0.2.10, 10.0.0.1",
         },
@@ -626,41 +573,22 @@ describe("Product Service E2E", () => {
 
       expect(missingIpResult.statusCode).toBe(200);
       const missingIpBody = JSON.parse(missingIpResult.body);
-      expect(
-        missingIpBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.andTargeted);
+      expect(productIds(missingIpBody)).not.toContain(
+        TARGET_PRODUCT_IDS.andTargeted,
+      );
     });
   });
 
   describe("GET /products/by-entitlement/{entitlementKey}", () => {
     it("filters by entitlement key and CloudFront country header", async () => {
-      await seedProduct({
-        productId: TARGET_PRODUCT_IDS.byEntCountryUs,
-        name: "By Entitlement US Product",
-        entitlements: ["subject_access"],
-        targeting: {
-          countries: ["US"],
-        },
-      });
+      await seedByEntitlementCountryTargetedProducts();
 
-      await seedProduct({
-        productId: TARGET_PRODUCT_IDS.byEntCountryCa,
-        name: "By Entitlement CA Product",
-        entitlements: ["subject_access"],
-        targeting: {
-          countries: ["CA"],
-        },
-      });
-
-      const usEvent = createApiGatewayEvent({
+      const usEvent = makeAuthedEvent({
         httpMethod: "GET",
         path: "/products/by-entitlement/subject_access",
         resource: "/products/by-entitlement/{entitlementKey}",
         pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
-        headers: {
-          ...makeAuthHeaders(),
-          "cloudfront-viewer-country": "US",
-        },
+        headers: { "cloudfront-viewer-country": "US" },
         body: null,
       });
 
@@ -668,22 +596,17 @@ describe("Product Service E2E", () => {
 
       expect(usResult.statusCode).toBe(200);
       const usBody = JSON.parse(usResult.body);
-      expect(
-        usBody.data.map((p: { productId: string }) => p.productId),
-      ).toContain(TARGET_PRODUCT_IDS.byEntCountryUs);
-      expect(
-        usBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.byEntCountryCa);
+      expect(productIds(usBody)).toContain(TARGET_PRODUCT_IDS.byEntCountryUs);
+      expect(productIds(usBody)).not.toContain(
+        TARGET_PRODUCT_IDS.byEntCountryCa,
+      );
 
-      const caEvent = createApiGatewayEvent({
+      const caEvent = makeAuthedEvent({
         httpMethod: "GET",
         path: "/products/by-entitlement/subject_access",
         resource: "/products/by-entitlement/{entitlementKey}",
         pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
-        headers: {
-          ...makeAuthHeaders(),
-          "cloudfront-viewer-country": "CA",
-        },
+        headers: { "cloudfront-viewer-country": "CA" },
         body: null,
       });
 
@@ -691,42 +614,21 @@ describe("Product Service E2E", () => {
 
       expect(caResult.statusCode).toBe(200);
       const caBody = JSON.parse(caResult.body);
-      expect(
-        caBody.data.map((p: { productId: string }) => p.productId),
-      ).toContain(TARGET_PRODUCT_IDS.byEntCountryCa);
-      expect(
-        caBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.byEntCountryUs);
+      expect(productIds(caBody)).toContain(TARGET_PRODUCT_IDS.byEntCountryCa);
+      expect(productIds(caBody)).not.toContain(
+        TARGET_PRODUCT_IDS.byEntCountryUs,
+      );
     });
 
     it("filters by entitlement key and IP CIDR block", async () => {
-      await seedProduct({
-        productId: TARGET_PRODUCT_IDS.byEntCidrAllowed,
-        name: "By Entitlement CIDR Allowed",
-        entitlements: ["subject_access"],
-        targeting: {
-          cidrBlocks: ["203.0.113.0/24"],
-        },
-      });
+      await seedByEntitlementCidrTargetedProducts();
 
-      await seedProduct({
-        productId: TARGET_PRODUCT_IDS.byEntCidrDenied,
-        name: "By Entitlement CIDR Denied",
-        entitlements: ["subject_access"],
-        targeting: {
-          cidrBlocks: ["198.51.100.0/24"],
-        },
-      });
-
-      const allowedEvent = createApiGatewayEvent({
+      const allowedEvent = makeAuthedEvent({
         httpMethod: "GET",
         path: "/products/by-entitlement/subject_access",
         resource: "/products/by-entitlement/{entitlementKey}",
         pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
-        headers: {
-          ...makeAuthHeaders(),
-          "x-forwarded-for": "203.0.113.10, 10.0.0.1",
-        },
+        headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1" },
         body: null,
       });
 
@@ -734,22 +636,19 @@ describe("Product Service E2E", () => {
 
       expect(allowedResult.statusCode).toBe(200);
       const allowedBody = JSON.parse(allowedResult.body);
-      expect(
-        allowedBody.data.map((p: { productId: string }) => p.productId),
-      ).toContain(TARGET_PRODUCT_IDS.byEntCidrAllowed);
-      expect(
-        allowedBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.byEntCidrDenied);
+      expect(productIds(allowedBody)).toContain(
+        TARGET_PRODUCT_IDS.byEntCidrAllowed,
+      );
+      expect(productIds(allowedBody)).not.toContain(
+        TARGET_PRODUCT_IDS.byEntCidrDenied,
+      );
 
-      const deniedEvent = createApiGatewayEvent({
+      const deniedEvent = makeAuthedEvent({
         httpMethod: "GET",
         path: "/products/by-entitlement/subject_access",
         resource: "/products/by-entitlement/{entitlementKey}",
         pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
-        headers: {
-          ...makeAuthHeaders(),
-          "x-forwarded-for": "192.0.2.10, 10.0.0.1",
-        },
+        headers: { "x-forwarded-for": "192.0.2.10, 10.0.0.1" },
         body: null,
       });
 
@@ -757,58 +656,51 @@ describe("Product Service E2E", () => {
 
       expect(deniedResult.statusCode).toBe(200);
       const deniedBody = JSON.parse(deniedResult.body);
-      expect(
-        deniedBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.byEntCidrAllowed);
+      expect(productIds(deniedBody)).not.toContain(
+        TARGET_PRODUCT_IDS.byEntCidrAllowed,
+      );
     });
 
     it("filters by entitlement key and user percentage rollout", async () => {
-      await seedProduct({
-        productId: TARGET_PRODUCT_IDS.byEntPercent20,
-        name: "By Entitlement Twenty Percent",
-        entitlements: ["subject_access"],
-        targeting: {
-          percentage: ROLLOUT_PERCENTAGE,
-        },
-      });
+      await seedByEntitlementPercentageTargetedProduct();
 
-      const matchingEvent = createApiGatewayEvent({
-        httpMethod: "GET",
-        path: "/products/by-entitlement/subject_access",
-        resource: "/products/by-entitlement/{entitlementKey}",
-        pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
-        headers: {
-          ...makeAuthHeaders(matchingRolloutUserId),
+      const matchingEvent = makeAuthedEvent(
+        {
+          httpMethod: "GET",
+          path: "/products/by-entitlement/subject_access",
+          resource: "/products/by-entitlement/{entitlementKey}",
+          pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
+          body: null,
         },
-        body: null,
-      });
+        matchingRolloutUserId,
+      );
 
       const matchingResult = await handler(matchingEvent);
 
       expect(matchingResult.statusCode).toBe(200);
       const matchingBody = JSON.parse(matchingResult.body);
-      expect(
-        matchingBody.data.map((p: { productId: string }) => p.productId),
-      ).toContain(TARGET_PRODUCT_IDS.byEntPercent20);
+      expect(productIds(matchingBody)).toContain(
+        TARGET_PRODUCT_IDS.byEntPercent20,
+      );
 
-      const nonMatchingEvent = createApiGatewayEvent({
-        httpMethod: "GET",
-        path: "/products/by-entitlement/subject_access",
-        resource: "/products/by-entitlement/{entitlementKey}",
-        pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
-        headers: {
-          ...makeAuthHeaders(nonMatchingRolloutUserId),
+      const nonMatchingEvent = makeAuthedEvent(
+        {
+          httpMethod: "GET",
+          path: "/products/by-entitlement/subject_access",
+          resource: "/products/by-entitlement/{entitlementKey}",
+          pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
+          body: null,
         },
-        body: null,
-      });
+        nonMatchingRolloutUserId,
+      );
 
       const nonMatchingResult = await handler(nonMatchingEvent);
 
       expect(nonMatchingResult.statusCode).toBe(200);
       const nonMatchingBody = JSON.parse(nonMatchingResult.body);
-      expect(
-        nonMatchingBody.data.map((p: { productId: string }) => p.productId),
-      ).not.toContain(TARGET_PRODUCT_IDS.byEntPercent20);
+      expect(productIds(nonMatchingBody)).not.toContain(
+        TARGET_PRODUCT_IDS.byEntPercent20,
+      );
     });
   });
 

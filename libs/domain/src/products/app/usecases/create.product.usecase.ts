@@ -25,7 +25,7 @@ export class CreateProductUseCase {
       addons: input.addons,
       providers: input.providers,
       targeting,
-      isActive: true,
+      isActive,
     });
 
     await this.repo.create(product);

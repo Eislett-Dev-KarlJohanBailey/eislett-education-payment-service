@@ -300,9 +300,13 @@ export class DynamoProductRepository implements ProductRepository {
       ? `TYPE#${filters.type}`
       : `TYPE#${ProductType.SUBSCRIPTION}`; // default view
 
-    // When filtering by entitlementKey (or namePrefix), fetch larger batches so we can fill a page without many round trips
+    // When filtering by entitlementKey, namePrefix, or targeting fields, fetch larger batches so we can fill a page without many round trips
     const hasClientSideFilter = Boolean(
-      filters.entitlementKey || filters.namePrefix,
+      filters.entitlementKey ||
+        filters.namePrefix ||
+        filters.userId ||
+        filters.country ||
+        filters.ipAddress,
     );
     const dynamoLimit = hasClientSideFilter
       ? Math.max(pageSize * 5, 100)
