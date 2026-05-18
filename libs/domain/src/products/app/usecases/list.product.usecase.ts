@@ -59,6 +59,9 @@ export class ListProductsUseCase {
         type: input.type,
         isActive: input.isActive,
         entitlementKey,
+        userId: input.userId,
+        country: input.country,
+        ipAddress: input.ipAddress,
       },
       {
         pageNumber: input.pageNumber,
