@@ -4,6 +4,7 @@ import {
   BillingType,
   ProductType,
 } from "@libs/domain";
+import config from "../../config";
 import { PowerTranzClient } from "../../infrastructure/powertranz.client";
 import {
   PowerTranzIntentRepository,
@@ -19,8 +20,10 @@ export interface CreatePowerTranzPaymentIntentInput {
 }
 
 export interface CreatePowerTranzPaymentIntentOutput {
-  hppHtml?: string;
   redirectData?: unknown;
+  spiToken: string;
+  transactionIdentifier?: string;
+  orderIdentifier?: string;
   expiresAt: string;
   amount: number;
   currency: string;
@@ -36,14 +39,29 @@ export class CreatePaymentIntentUseCase {
     private readonly paymentIntentRepo: PowerTranzIntentRepository,
   ) {}
 
+  private merchantResponseUrl(): string {
+    const baseUrl = config.powertranz.merchantResponseUrl.trim();
+    if (!baseUrl) {
+      throw new Error("POWERTRANZ_MERCHANT_RESPONSE_URL is not configured");
+    }
+
+    if (!config.powertranz.callbackSecret) {
+      return baseUrl;
+    }
+
+    const url = new URL(baseUrl);
+    url.searchParams.set("secret", config.powertranz.callbackSecret);
+    return url.toString();
+  }
+
   async execute(
     input: CreatePowerTranzPaymentIntentInput,
   ): Promise<CreatePowerTranzPaymentIntentOutput> {
     const price = await this.getPriceUseCase.execute(input.priceId);
     const product = await this.getProductUseCase.execute(price.productId);
 
-    if (!["USD"].includes(price.currency.toUpperCase())) {
-      throw new BadRequestError("Only USD and TTD are supported");
+    if (price.currency.toUpperCase() !== "USD") {
+      throw new BadRequestError("Only USD is supported");
     }
 
     if (price.billingType !== BillingType.ONE_TIME) {
@@ -55,13 +73,40 @@ export class CreatePaymentIntentUseCase {
     }
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const transactionIdentifier = randomUUID();
+    const orderIdentifier = `POWERTRANZ-${transactionIdentifier}`;
 
-    const auth = await this.powerTranzClient.createSpiToken({
-      Amount: price.amount,
-      CurrencyCode: price.currency,
-      CustomerReference: input.userId,
-      ProductReference: input.priceId,
-      ProductName: product.name,
+    // PowerTranz Sale completes settlement after the browser returns and we post
+    // the SPI token to /payment, so we do not need a separate capture step.
+    const sale = await this.powerTranzClient.createSaleSpiToken({
+      TransactionIdentifier: transactionIdentifier,
+      TotalAmount: price.amount,
+      CurrencyCode: "840",
+      ThreeDSecure: true,
+      Source: {},
+      OrderIdentifier: orderIdentifier,
+      BillingAddress: {
+        FirstName: "Student",
+        LastName: "Customer",
+        CountryCode: "840",
+        ...(input.userEmail ? { EmailAddress: input.userEmail } : {}),
+      },
+      AddressMatch: false,
+      ExtendedData: {
+        ThreeDSecure: {
+          ChallengeWindowSize: 4,
+          ChallengeIndicator: "01",
+        },
+        MerchantResponseUrl: this.merchantResponseUrl(),
+        HostedPage: {
+          ...(config.powertranz.hostedPagePageSet
+            ? { PageSet: config.powertranz.hostedPagePageSet }
+            : {}),
+          ...(config.powertranz.hostedPagePageName
+            ? { PageName: config.powertranz.hostedPagePageName }
+            : {}),
+        },
+      },
     });
 
     const intent: PowerTranzPaymentIntent = {
@@ -70,19 +115,23 @@ export class CreatePaymentIntentUseCase {
       userEmail: input.userEmail,
       priceId: input.priceId,
       productId: price.productId,
-      spiToken: auth.spiToken,
+      spiToken: sale.spiToken,
       amount: price.amount,
       currency: price.currency,
       status: "pending_payment",
       expiresAt: expiresAt.toISOString(),
       createdAt: new Date().toISOString(),
+      transactionId: sale.transactionIdentifier || transactionIdentifier,
+      orderIdentifier: sale.orderIdentifier || orderIdentifier,
     };
 
     await this.paymentIntentRepo.save(intent);
 
     return {
-      hppHtml: auth.hppHtml,
-      redirectData: auth.redirectData,
+      redirectData: sale.redirectData,
+      spiToken: sale.spiToken,
+      transactionIdentifier: intent.transactionId,
+      orderIdentifier: intent.orderIdentifier,
       expiresAt: expiresAt.toISOString(),
       amount: price.amount,
       currency: price.currency,

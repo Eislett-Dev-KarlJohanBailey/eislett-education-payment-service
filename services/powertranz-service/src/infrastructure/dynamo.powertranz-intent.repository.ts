@@ -47,8 +47,8 @@ export class DynamoPowerTranzIntentRepository implements PowerTranzIntentReposit
     return (res.Item as PowerTranzPaymentIntent) || null;
   }
 
-  async updateById(
-    id: string,
+  async updateBySpiToken(
+    spiToken: string,
     patch: Partial<PowerTranzPaymentIntent>,
   ): Promise<void> {
     const entries = Object.entries(patch).filter(
@@ -74,7 +74,7 @@ export class DynamoPowerTranzIntentRepository implements PowerTranzIntentReposit
     await this.client.send(
       new UpdateCommand({
         TableName: this.tableName,
-        Key: { id },
+        Key: { spiToken },
         UpdateExpression: `SET ${sets.join(", ")}`,
         ExpressionAttributeNames: names,
         ExpressionAttributeValues: values,

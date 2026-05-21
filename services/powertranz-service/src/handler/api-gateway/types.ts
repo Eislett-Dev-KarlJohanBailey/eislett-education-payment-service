@@ -5,5 +5,6 @@ export interface RequestContext {
   query: Record<string, string>;
   body: any;
   headers?: Record<string, string>;
+  user?: { id: string; role?: string };
   rawBody?: string;
 }

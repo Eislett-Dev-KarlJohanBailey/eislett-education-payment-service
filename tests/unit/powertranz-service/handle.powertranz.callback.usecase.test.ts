@@ -22,7 +22,7 @@ describe("HandlePowerTranzCallbackUseCase", () => {
 
     const paymentIntentRepo = {
       findBySpiToken: jest.fn().mockResolvedValue(baseIntent),
-      updateById: jest.fn().mockResolvedValue(undefined),
+      updateBySpiToken: jest.fn().mockResolvedValue(undefined),
     };
 
     const emailQueue = {
@@ -81,8 +81,8 @@ describe("HandlePowerTranzCallbackUseCase", () => {
     });
 
     expect(powerTranzClient.chargePayment).toHaveBeenCalledWith("spi_123");
-    expect(paymentIntentRepo.updateById).toHaveBeenCalledWith(
-      "intent_1",
+    expect(paymentIntentRepo.updateBySpiToken).toHaveBeenCalledWith(
+      "spi_123",
       expect.objectContaining({
         status: "completed",
         transactionId: "txn_123",
@@ -118,8 +118,8 @@ describe("HandlePowerTranzCallbackUseCase", () => {
     });
 
     expect(powerTranzClient.chargePayment).not.toHaveBeenCalled();
-    expect(paymentIntentRepo.updateById).toHaveBeenCalledWith(
-      "intent_1",
+    expect(paymentIntentRepo.updateBySpiToken).toHaveBeenCalledWith(
+      "spi_123",
       expect.objectContaining({ status: "failed" }),
     );
     expect(emailQueue.send).toHaveBeenCalledWith(
@@ -157,8 +157,8 @@ describe("HandlePowerTranzCallbackUseCase", () => {
     });
 
     expect(powerTranzClient.chargePayment).toHaveBeenCalledTimes(1);
-    expect(paymentIntentRepo.updateById).toHaveBeenCalledWith(
-      "intent_1",
+    expect(paymentIntentRepo.updateBySpiToken).toHaveBeenCalledWith(
+      "spi_123",
       expect.objectContaining({ status: "failed" }),
     );
     expect(emailQueue.send).toHaveBeenCalledWith(

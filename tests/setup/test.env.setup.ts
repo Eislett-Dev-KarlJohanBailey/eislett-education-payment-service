@@ -59,3 +59,12 @@ process.env.ENVIRONMENT = "test";
 process.env.ENTITLEMENTS_TABLE = "entitlements-test";
 process.env.PRICES_TABLE = "prices-test";
 process.env.PRODUCTS_TABLE = "products-test";
+process.env.JWT_ACCESS_TOKEN_SECRET = "test-jwt-secret";
+process.env.POWERTRANZ_MERCHANT_RESPONSE_URL =
+  "https://example.test/powertranz/callback";
+process.env.POWERTRANZ_INTENTS_TABLE_NAME = "powertranz-intents-test";
+process.env.TRANSACTIONS_TABLE = "transactions-test";
+process.env.BILLING_EVENTS_TOPIC_ARN =
+  "arn:aws:sns:us-east-1:000000000000:billing-events-test";
+process.env.EMAIL_QUEUE_URL =
+  "http://localhost:4566/000000000000/email-service-queue-test";

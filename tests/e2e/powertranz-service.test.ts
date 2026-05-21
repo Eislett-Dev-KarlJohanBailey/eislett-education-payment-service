@@ -51,7 +51,7 @@ describe("Powertranz Service Smoke Test", () => {
 
     expect(result.statusCode).toBe(400);
     const body = JSON.parse(result.body);
-    expect(body.error).toBe("VALIDATION_ERROR");
+    expect(body.error).toBe("BAD_REQUEST");
   });
 
   it("returns 500 when the controller raises an unexpected error", async () => {

@@ -60,7 +60,7 @@ export class HandlePowerTranzCallbackUseCase {
       authIso === "HP0" || (authStatus === "Y" && authIso === "3D0");
 
     if (hasThreeDsSignal && !threeDsApproved) {
-      await this.paymentIntentRepo.updateById(intent.id, {
+      await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
         status: "failed",
       });
 
@@ -85,9 +85,11 @@ export class HandlePowerTranzCallbackUseCase {
     let paymentResult: unknown;
 
     try {
+      // The browser return only proves 3DS finished. This server call is what
+      // asks PowerTranz to finalize the Sale and submit it for settlement.
       paymentResult = await this.powerTranzClient.chargePayment(input.spiToken);
     } catch (error) {
-      await this.paymentIntentRepo.updateById(intent.id, {
+      await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
         status: "failed",
       });
 
@@ -115,7 +117,7 @@ export class HandlePowerTranzCallbackUseCase {
     ); // checks if payment was approved, "00" means approved in PowerTranz
 
     if (iso !== "00") {
-      await this.paymentIntentRepo.updateById(intent.id, {
+      await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
         status: "failed",
       });
 
@@ -147,7 +149,7 @@ export class HandlePowerTranzCallbackUseCase {
           .TransactionIdentifier ?? "",
       ).trim() || input.spiToken;
 
-    await this.paymentIntentRepo.updateById(intent.id, {
+    await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
       status: "completed",
       transactionId,
     });

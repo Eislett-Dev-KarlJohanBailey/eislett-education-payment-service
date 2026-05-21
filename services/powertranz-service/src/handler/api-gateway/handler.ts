@@ -3,6 +3,7 @@ import { parseRequest } from "./parse-request";
 import { routes } from "./routes";
 import { corsHeaders, errorResponse, response } from "./response";
 import { RequestContext } from "./types";
+import { requireUser } from "@libs/domain";
 
 function normalizePath(path: string): string {
   if (path.startsWith("/v1/")) {
@@ -73,11 +74,15 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
     const req = parseRequest(event);
     const actualPath = event.path || req.path;
     const normalizedPath = normalizePath(actualPath);
+    const pathWithoutQuery = normalizedPath.split("?")[0];
+
+    const needsUser = pathWithoutQuery === "/powertranz/payment-intents";
 
     const requestWithContext = {
       ...req,
       path: normalizedPath,
       pathParams: req.pathParams || {},
+      user: needsUser ? requireUser(event) : undefined,
     };
 
     const handler = findRouteHandler(

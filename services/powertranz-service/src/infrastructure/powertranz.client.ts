@@ -4,8 +4,9 @@ type FetchLike = typeof fetch;
 
 interface PaymentResponse {
   SpiToken?: string;
-  Html?: string;
   RedirectData?: unknown;
+  TransactionIdentifier?: string;
+  OrderIdentifier?: string;
 }
 
 export class PowerTranzClient {
@@ -44,12 +45,20 @@ export class PowerTranzClient {
     return headers;
   }
 
-  async createSpiToken(payload: Record<string, unknown>): Promise<{
+  private paymentHeaders(): Record<string, string> {
+    return {
+      "Content-Type": "text/plain",
+      Accept: "application/json",
+    };
+  }
+
+  async createSaleSpiToken(payload: Record<string, unknown>): Promise<{
     spiToken: string;
-    hppHtml?: string;
     redirectData?: unknown;
+    transactionIdentifier?: string;
+    orderIdentifier?: string;
   }> {
-    const res = await this.fetchImpl(this.url("/api/spi/auth"), {
+    const res = await this.fetchImpl(this.url("/api/spi/sale"), {
       method: "POST",
       headers: this.jsonHeaders(true),
       body: JSON.stringify(payload),
@@ -70,16 +79,17 @@ export class PowerTranzClient {
 
     return {
       spiToken,
-      hppHtml: response.Html,
       redirectData: response.RedirectData,
+      transactionIdentifier: response.TransactionIdentifier,
+      orderIdentifier: response.OrderIdentifier,
     };
   }
 
   async chargePayment(spiToken: string): Promise<unknown> {
     const res = await this.fetchImpl(this.url("/api/spi/payment"), {
       method: "POST",
-      headers: this.jsonHeaders(false),
-      body: JSON.stringify(spiToken),
+      headers: this.paymentHeaders(),
+      body: spiToken,
     });
 
     const raw = await res.json().catch(() => null);

@@ -10,10 +10,12 @@ export class PowerTranzCallbackController {
 
   handle = async (req: RequestContext) => {
     const headerSecret = req.headers?.["x-powertranz-callback-secret"];
+    const querySecret = req.query?.secret;
 
     if (
       config.powertranz.callbackSecret &&
-      headerSecret !== config.powertranz.callbackSecret
+      headerSecret !== config.powertranz.callbackSecret &&
+      querySecret !== config.powertranz.callbackSecret
     ) {
       throw new ForbiddenError("Forbidden");
     }
