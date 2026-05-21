@@ -10,7 +10,12 @@ import { DynamoProductRepository, ListProductsUseCase } from "@libs/domain";
 import {
   seedProductsForListAndPaginationTests,
   seedProductsForByEntitlementTests,
+  seedProduct,
 } from "../helpers/product-service-seed";
+import {
+  findUserIdForBucketBelow,
+  findUserIdForBucketAtOrAbove,
+} from "../helpers/product-targeting-test-helper";
 import { ProductType } from "../../libs/domain/src/products/domain/value-objects/product-type.vo";
 
 describe("Product listing integration tests", () => {
@@ -91,5 +96,147 @@ describe("Product listing integration tests", () => {
     expect(result.items.length).toBeLessThanOrEqual(3);
     expect(result.pageNumber).toBe(2);
     expect(result.pageSize).toBe(3);
+  });
+
+  it("filters products by country", async () => {
+    await seedProduct({
+      productId: "country-us",
+      name: "US Only Product",
+      entitlements: ["subject_access"],
+      targeting: {
+        countries: ["US"],
+      },
+    });
+
+    await seedProduct({
+      productId: "country-ca",
+      name: "CA Only Product",
+      entitlements: ["subject_access"],
+      targeting: {
+        countries: ["CA"],
+      },
+    });
+
+    const usResult = await useCase.execute({
+      pageNumber: 1,
+      pageSize: 20,
+      country: "US",
+    });
+
+    expect(usResult.items).toHaveLength(1);
+    expect(usResult.items[0].productId).toBe("country-us");
+
+    const caResult = await useCase.execute({
+      pageNumber: 1,
+      pageSize: 20,
+      country: "CA",
+    });
+
+    expect(caResult.items).toHaveLength(1);
+    expect(caResult.items[0].productId).toBe("country-ca");
+  });
+
+  it("filters products by user percentage bucket", async () => {
+    const entitlementKey = "subject_access";
+
+    await seedProduct({
+      productId: "percent-20",
+      name: "Twenty Percent Product",
+      entitlements: ["subject_access"],
+      targeting: {
+        percentage: 20,
+      },
+    });
+
+    const matchingUserId = findUserIdForBucketBelow(20, entitlementKey);
+    const nonMatchingUserId = findUserIdForBucketAtOrAbove(20, entitlementKey);
+
+    const matchingResult = await useCase.execute({
+      pageNumber: 1,
+      pageSize: 20,
+      type: ProductType.SUBSCRIPTION,
+      entitlementKey,
+      userId: matchingUserId,
+    });
+
+    expect(matchingResult.items.map((p) => p.productId)).toContain(
+      "percent-20",
+    );
+
+    const nonMatchingResult = await useCase.execute({
+      pageNumber: 1,
+      pageSize: 20,
+      type: ProductType.SUBSCRIPTION,
+      entitlementKey,
+      userId: nonMatchingUserId,
+    });
+
+    expect(nonMatchingResult.items).toHaveLength(0);
+  });
+
+  it("filters products by IP CIDR block", async () => {
+    await seedProduct({
+      productId: "cidr-allowed",
+      name: "CIDR Allowed Product",
+      entitlements: ["subject_access"],
+      targeting: {
+        cidrBlocks: ["203.0.113.0/24"],
+      },
+    });
+
+    const allowedResult = await useCase.execute({
+      pageNumber: 1,
+      pageSize: 20,
+      ipAddress: "203.0.113.10",
+    });
+
+    expect(allowedResult.items).toHaveLength(1);
+    expect(allowedResult.items[0].productId).toBe("cidr-allowed");
+
+    const deniedResult = await useCase.execute({
+      pageNumber: 1,
+      pageSize: 20,
+      ipAddress: "198.51.100.10",
+    });
+
+    expect(deniedResult.items).toHaveLength(0);
+  });
+
+  it("requires all targeting rules to pass", async () => {
+    await seedProduct({
+      productId: "and-targeted",
+      name: "Country And CIDR Product",
+      entitlements: ["subject_access"],
+      targeting: {
+        countries: ["US"],
+        cidrBlocks: ["203.0.113.0/24"],
+      },
+    });
+
+    const fullMatch = await useCase.execute({
+      pageNumber: 1,
+      pageSize: 20,
+      country: "US",
+      ipAddress: "203.0.113.10",
+    });
+
+    expect(fullMatch.items).toHaveLength(1);
+    expect(fullMatch.items[0].productId).toBe("and-targeted");
+
+    const missingCountry = await useCase.execute({
+      pageNumber: 1,
+      pageSize: 20,
+      ipAddress: "203.0.113.10",
+    });
+
+    expect(missingCountry.items).toHaveLength(0);
+
+    const missingIp = await useCase.execute({
+      pageNumber: 1,
+      pageSize: 20,
+      country: "US",
+    });
+
+    expect(missingIp.items).toHaveLength(0);
   });
 });

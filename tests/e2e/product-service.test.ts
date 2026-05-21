@@ -14,10 +14,62 @@ import {
   seedProductForEditDelete,
   seedProductsForByEntitlementTests,
   seedProductsForListAndPaginationTests,
+  seedProduct,
   SEED_PRODUCT_ID,
 } from "../helpers/product-service-seed";
+import {
+  findUserIdForBucketBelow,
+  findUserIdForBucketAtOrAbove,
+} from "../helpers/product-targeting-test-helper";
+import {
+  TARGET_ENTITLEMENT_KEY,
+  ROLLOUT_PERCENTAGE,
+  TARGET_PRODUCT_IDS,
+  seedByEntitlementCountryTargetedProducts,
+  seedByEntitlementCidrTargetedProducts,
+  seedByEntitlementPercentageTargetedProduct,
+  seedCidrTargetedProducts,
+  seedCountryTargetedProducts,
+  seedPercentageTargetedProduct,
+} from "../helpers/product-targeting-seed-helper";
 
 let handler: (typeof import("../../services/product-service/src/handler/index"))["handler"];
+
+function makeAuthHeaders(userId = "test-user-e2e", role = "learner") {
+  return {
+    ...createApiGatewayEvent().headers,
+    Authorization: `Bearer ${createJwtWithRole(role, userId)}`,
+  };
+}
+
+type ApiGatewayEventInput = Parameters<typeof createApiGatewayEvent>[0];
+
+function makeAuthedEvent(
+  input: ApiGatewayEventInput,
+  userId = "test-user-e2e",
+  role = "learner",
+) {
+  return createApiGatewayEvent({
+    ...input,
+    headers: {
+      ...makeAuthHeaders(userId, role),
+      ...(input?.headers ?? {}),
+    },
+  });
+}
+
+function productIds(body: any): string[] {
+  return (body?.data ?? []).map((p: { productId: string }) => p.productId);
+}
+
+const matchingRolloutUserId = findUserIdForBucketBelow(
+  ROLLOUT_PERCENTAGE,
+  TARGET_ENTITLEMENT_KEY,
+);
+const nonMatchingRolloutUserId = findUserIdForBucketAtOrAbove(
+  ROLLOUT_PERCENTAGE,
+  TARGET_ENTITLEMENT_KEY,
+);
 
 describe("Product Service E2E", () => {
   beforeAll(async () => {
@@ -102,11 +154,6 @@ describe("Product Service E2E", () => {
       await seedProductsForListAndPaginationTests();
     });
 
-    const authHeaders = () => ({
-      ...createApiGatewayEvent().headers,
-      Authorization: `Bearer ${createJwtWithRole("learner")}`,
-    });
-
     it("honors page_size and page_number", async () => {
       const pageSize = 3;
       const event = createApiGatewayEvent({
@@ -117,7 +164,7 @@ describe("Product Service E2E", () => {
           page_size: String(pageSize),
           page_number: "1",
         },
-        headers: authHeaders(),
+        headers: makeAuthHeaders(),
       });
 
       const result = await handler(event);
@@ -143,7 +190,7 @@ describe("Product Service E2E", () => {
           page_size: String(pageSize),
           page_number: "1",
         },
-        headers: authHeaders(),
+        headers: makeAuthHeaders(),
       });
       const eventPage2 = createApiGatewayEvent({
         httpMethod: "GET",
@@ -153,7 +200,7 @@ describe("Product Service E2E", () => {
           page_size: String(pageSize),
           page_number: "2",
         },
-        headers: authHeaders(),
+        headers: makeAuthHeaders(),
       });
 
       const result1 = await handler(eventPage1);
@@ -180,7 +227,7 @@ describe("Product Service E2E", () => {
         path: "/products",
         resource: "/products",
         queryStringParameters: { type: "subscription" },
-        headers: authHeaders(),
+        headers: makeAuthHeaders(),
       });
 
       const result = await handler(event);
@@ -200,7 +247,7 @@ describe("Product Service E2E", () => {
         path: "/products",
         resource: "/products",
         queryStringParameters: { type: "one_off" },
-        headers: authHeaders(),
+        headers: makeAuthHeaders(),
       });
 
       const result = await handler(event);
@@ -220,7 +267,7 @@ describe("Product Service E2E", () => {
         path: "/products",
         resource: "/products",
         queryStringParameters: { type: "addon" },
-        headers: authHeaders(),
+        headers: makeAuthHeaders(),
       });
 
       const result = await handler(event);
@@ -240,7 +287,7 @@ describe("Product Service E2E", () => {
         path: "/products",
         resource: "/products",
         queryStringParameters: { active: "true" },
-        headers: authHeaders(),
+        headers: makeAuthHeaders(),
       });
 
       const result = await handler(event);
@@ -259,7 +306,7 @@ describe("Product Service E2E", () => {
         path: "/products",
         resource: "/products",
         queryStringParameters: { active: "false" },
-        headers: authHeaders(),
+        headers: makeAuthHeaders(),
       });
 
       const result = await handler(event);
@@ -279,7 +326,7 @@ describe("Product Service E2E", () => {
         path: "/products",
         resource: "/products",
         queryStringParameters: { entitlement_key: "subject_access" },
-        headers: authHeaders(),
+        headers: makeAuthHeaders(),
       });
 
       const result = await handler(event);
@@ -299,7 +346,7 @@ describe("Product Service E2E", () => {
         path: "/products",
         resource: "/products",
         queryStringParameters: { entitlementKey: "token" },
-        headers: authHeaders(),
+        headers: makeAuthHeaders(),
       });
 
       const result = await handler(event);
@@ -324,7 +371,7 @@ describe("Product Service E2E", () => {
           page_size: "2",
           page_number: "1",
         },
-        headers: authHeaders(),
+        headers: makeAuthHeaders(),
       });
 
       const result = await handler(event);
@@ -338,6 +385,322 @@ describe("Product Service E2E", () => {
       });
       expect(body.pagination.page_size).toBe(2);
       expect(body.pagination.page_number).toBe(1);
+    });
+
+    it("filters products by CloudFront country header", async () => {
+      await seedCountryTargetedProducts();
+
+      const usEvent = makeAuthedEvent({
+        httpMethod: "GET",
+        path: "/products",
+        resource: "/products",
+        queryStringParameters: { type: "subscription" },
+        headers: { "cloudfront-viewer-country": "US" },
+      });
+
+      const usResult = await handler(usEvent);
+
+      expect(usResult.statusCode).toBe(200);
+      const usBody = JSON.parse(usResult.body);
+      expect(usBody.data.length).toBeGreaterThan(0);
+      expect(productIds(usBody)).toContain(TARGET_PRODUCT_IDS.countryUs);
+      expect(productIds(usBody)).not.toContain(TARGET_PRODUCT_IDS.countryCa);
+
+      const caEvent = makeAuthedEvent({
+        httpMethod: "GET",
+        path: "/products",
+        resource: "/products",
+        queryStringParameters: { type: "subscription" },
+        headers: { "cloudfront-viewer-country": "CA" },
+      });
+
+      const caResult = await handler(caEvent);
+
+      expect(caResult.statusCode).toBe(200);
+      const caBody = JSON.parse(caResult.body);
+      expect(caBody.data.length).toBeGreaterThan(0);
+      expect(productIds(caBody)).toContain(TARGET_PRODUCT_IDS.countryCa);
+      expect(productIds(caBody)).not.toContain(TARGET_PRODUCT_IDS.countryUs);
+    });
+
+    it("filters products by user percentage rollout", async () => {
+      await seedPercentageTargetedProduct();
+
+      const matchingEvent = makeAuthedEvent(
+        {
+          httpMethod: "GET",
+          path: "/products",
+          resource: "/products",
+          queryStringParameters: {
+            type: "subscription",
+            entitlement_key: TARGET_ENTITLEMENT_KEY,
+          },
+        },
+        matchingRolloutUserId,
+      );
+
+      const matchingResult = await handler(matchingEvent);
+
+      expect(matchingResult.statusCode).toBe(200);
+      const matchingBody = JSON.parse(matchingResult.body);
+      expect(productIds(matchingBody)).toContain(TARGET_PRODUCT_IDS.percent20);
+
+      const nonMatchingEvent = makeAuthedEvent(
+        {
+          httpMethod: "GET",
+          path: "/products",
+          resource: "/products",
+          queryStringParameters: {
+            type: "subscription",
+            entitlement_key: TARGET_ENTITLEMENT_KEY,
+          },
+        },
+        nonMatchingRolloutUserId,
+      );
+
+      const nonMatchingResult = await handler(nonMatchingEvent);
+
+      expect(nonMatchingResult.statusCode).toBe(200);
+      const nonMatchingBody = JSON.parse(nonMatchingResult.body);
+      expect(productIds(nonMatchingBody)).not.toContain(
+        TARGET_PRODUCT_IDS.percent20,
+      );
+    });
+    it("filters products by IP CIDR block", async () => {
+      await seedCidrTargetedProducts();
+
+      const allowedEvent = makeAuthedEvent({
+        httpMethod: "GET",
+        path: "/products",
+        resource: "/products",
+        queryStringParameters: {
+          type: "subscription",
+        },
+        headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1" },
+      });
+
+      const allowedResult = await handler(allowedEvent);
+
+      expect(allowedResult.statusCode).toBe(200);
+      const allowedBody = JSON.parse(allowedResult.body);
+      expect(productIds(allowedBody)).toContain(TARGET_PRODUCT_IDS.cidrAllowed);
+      expect(productIds(allowedBody)).not.toContain(
+        TARGET_PRODUCT_IDS.cidrDenied,
+      );
+
+      const deniedEvent = makeAuthedEvent({
+        httpMethod: "GET",
+        path: "/products",
+        resource: "/products",
+        queryStringParameters: {
+          type: "subscription",
+        },
+        headers: { "x-forwarded-for": "192.0.2.10, 10.0.0.1" },
+      });
+
+      const deniedResult = await handler(deniedEvent);
+
+      expect(deniedResult.statusCode).toBe(200);
+      const deniedBody = JSON.parse(deniedResult.body);
+      expect(productIds(deniedBody)).not.toContain(
+        TARGET_PRODUCT_IDS.cidrAllowed,
+      );
+    });
+    it("requires all targeting rules to pass", async () => {
+      await seedProduct({
+        productId: TARGET_PRODUCT_IDS.andTargeted,
+        name: "Country And CIDR Product",
+        entitlements: ["subject_access"],
+        targeting: {
+          countries: ["US"],
+          cidrBlocks: ["203.0.113.0/24"],
+        },
+      });
+
+      const matchingEvent = makeAuthedEvent({
+        httpMethod: "GET",
+        path: "/products",
+        resource: "/products",
+        queryStringParameters: {
+          type: "subscription",
+        },
+        headers: {
+          "cloudfront-viewer-country": "US",
+          "x-forwarded-for": "203.0.113.10, 10.0.0.1",
+        },
+      });
+
+      const matchingResult = await handler(matchingEvent);
+
+      expect(matchingResult.statusCode).toBe(200);
+      const matchingBody = JSON.parse(matchingResult.body);
+      expect(productIds(matchingBody)).toContain(
+        TARGET_PRODUCT_IDS.andTargeted,
+      );
+
+      const missingCountryEvent = makeAuthedEvent({
+        httpMethod: "GET",
+        path: "/products",
+        resource: "/products",
+        queryStringParameters: {
+          type: "subscription",
+        },
+        headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1" },
+      });
+
+      const missingCountryResult = await handler(missingCountryEvent);
+
+      expect(missingCountryResult.statusCode).toBe(200);
+      const missingCountryBody = JSON.parse(missingCountryResult.body);
+      expect(productIds(missingCountryBody)).not.toContain(
+        TARGET_PRODUCT_IDS.andTargeted,
+      );
+
+      const missingIpEvent = makeAuthedEvent({
+        httpMethod: "GET",
+        path: "/products",
+        resource: "/products",
+        queryStringParameters: {
+          type: "subscription",
+        },
+        headers: {
+          "cloudfront-viewer-country": "US",
+          "x-forwarded-for": "192.0.2.10, 10.0.0.1",
+        },
+      });
+
+      const missingIpResult = await handler(missingIpEvent);
+
+      expect(missingIpResult.statusCode).toBe(200);
+      const missingIpBody = JSON.parse(missingIpResult.body);
+      expect(productIds(missingIpBody)).not.toContain(
+        TARGET_PRODUCT_IDS.andTargeted,
+      );
+    });
+  });
+
+  describe("GET /products/by-entitlement/{entitlementKey}", () => {
+    it("filters by entitlement key and CloudFront country header", async () => {
+      await seedByEntitlementCountryTargetedProducts();
+
+      const usEvent = makeAuthedEvent({
+        httpMethod: "GET",
+        path: "/products/by-entitlement/subject_access",
+        resource: "/products/by-entitlement/{entitlementKey}",
+        pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
+        headers: { "cloudfront-viewer-country": "US" },
+        body: null,
+      });
+
+      const usResult = await handler(usEvent);
+
+      expect(usResult.statusCode).toBe(200);
+      const usBody = JSON.parse(usResult.body);
+      expect(productIds(usBody)).toContain(TARGET_PRODUCT_IDS.byEntCountryUs);
+      expect(productIds(usBody)).not.toContain(
+        TARGET_PRODUCT_IDS.byEntCountryCa,
+      );
+
+      const caEvent = makeAuthedEvent({
+        httpMethod: "GET",
+        path: "/products/by-entitlement/subject_access",
+        resource: "/products/by-entitlement/{entitlementKey}",
+        pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
+        headers: { "cloudfront-viewer-country": "CA" },
+        body: null,
+      });
+
+      const caResult = await handler(caEvent);
+
+      expect(caResult.statusCode).toBe(200);
+      const caBody = JSON.parse(caResult.body);
+      expect(productIds(caBody)).toContain(TARGET_PRODUCT_IDS.byEntCountryCa);
+      expect(productIds(caBody)).not.toContain(
+        TARGET_PRODUCT_IDS.byEntCountryUs,
+      );
+    });
+
+    it("filters by entitlement key and IP CIDR block", async () => {
+      await seedByEntitlementCidrTargetedProducts();
+
+      const allowedEvent = makeAuthedEvent({
+        httpMethod: "GET",
+        path: "/products/by-entitlement/subject_access",
+        resource: "/products/by-entitlement/{entitlementKey}",
+        pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
+        headers: { "x-forwarded-for": "203.0.113.10, 10.0.0.1" },
+        body: null,
+      });
+
+      const allowedResult = await handler(allowedEvent);
+
+      expect(allowedResult.statusCode).toBe(200);
+      const allowedBody = JSON.parse(allowedResult.body);
+      expect(productIds(allowedBody)).toContain(
+        TARGET_PRODUCT_IDS.byEntCidrAllowed,
+      );
+      expect(productIds(allowedBody)).not.toContain(
+        TARGET_PRODUCT_IDS.byEntCidrDenied,
+      );
+
+      const deniedEvent = makeAuthedEvent({
+        httpMethod: "GET",
+        path: "/products/by-entitlement/subject_access",
+        resource: "/products/by-entitlement/{entitlementKey}",
+        pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
+        headers: { "x-forwarded-for": "192.0.2.10, 10.0.0.1" },
+        body: null,
+      });
+
+      const deniedResult = await handler(deniedEvent);
+
+      expect(deniedResult.statusCode).toBe(200);
+      const deniedBody = JSON.parse(deniedResult.body);
+      expect(productIds(deniedBody)).not.toContain(
+        TARGET_PRODUCT_IDS.byEntCidrAllowed,
+      );
+    });
+
+    it("filters by entitlement key and user percentage rollout", async () => {
+      await seedByEntitlementPercentageTargetedProduct();
+
+      const matchingEvent = makeAuthedEvent(
+        {
+          httpMethod: "GET",
+          path: "/products/by-entitlement/subject_access",
+          resource: "/products/by-entitlement/{entitlementKey}",
+          pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
+          body: null,
+        },
+        matchingRolloutUserId,
+      );
+
+      const matchingResult = await handler(matchingEvent);
+
+      expect(matchingResult.statusCode).toBe(200);
+      const matchingBody = JSON.parse(matchingResult.body);
+      expect(productIds(matchingBody)).toContain(
+        TARGET_PRODUCT_IDS.byEntPercent20,
+      );
+
+      const nonMatchingEvent = makeAuthedEvent(
+        {
+          httpMethod: "GET",
+          path: "/products/by-entitlement/subject_access",
+          resource: "/products/by-entitlement/{entitlementKey}",
+          pathParameters: { entitlementKey: TARGET_ENTITLEMENT_KEY },
+          body: null,
+        },
+        nonMatchingRolloutUserId,
+      );
+
+      const nonMatchingResult = await handler(nonMatchingEvent);
+
+      expect(nonMatchingResult.statusCode).toBe(200);
+      const nonMatchingBody = JSON.parse(nonMatchingResult.body);
+      expect(productIds(nonMatchingBody)).not.toContain(
+        TARGET_PRODUCT_IDS.byEntPercent20,
+      );
     });
   });
 
