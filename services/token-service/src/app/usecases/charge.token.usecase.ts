@@ -38,7 +38,7 @@ export class ChargeTokenUseCase {
     private readonly productRepo: ProductRepositoryPorts.ProductRepository,
     private readonly createEntitlementUseCase: CreateEntitlementUseCase,
     private readonly syncProductLimitsUseCase: SyncProductLimitsToEntitlementsUseCase,
-    private readonly entitlementUpdateNotifier?: EntitlementUpdateNotifier
+    private readonly entitlementUpdateNotifier?: EntitlementUpdateNotifier,
   ) {}
 
   async execute(input: ChargeTokenInput): Promise<ChargeTokenOutput> {
@@ -53,7 +53,7 @@ export class ChargeTokenUseCase {
     // Validate currency is "token"
     if (price.currency.toLowerCase() !== "token") {
       throw new DomainError(
-        `Price '${priceId}' does not use token currency. Currency: ${price.currency}`
+        `Price '${priceId}' does not use token currency. Currency: ${price.currency}`,
       );
     }
 
@@ -66,17 +66,19 @@ export class ChargeTokenUseCase {
     // Get user's token entitlement
     let entitlement = await this.entitlementRepo.findByUserAndKey(
       userId,
-      "token"
+      "token",
     );
 
     if (!entitlement) {
       throw new NotFoundError(
-        `Token entitlement not found for user '${userId}'`
+        `Token entitlement not found for user '${userId}'`,
       );
     }
 
     if (!entitlement.isActive()) {
-      throw new DomainError(`Token entitlement is not active for user '${userId}'`);
+      throw new DomainError(
+        `Token entitlement is not active for user '${userId}'`,
+      );
     }
 
     if (!entitlement.usage) {
@@ -89,7 +91,10 @@ export class ChargeTokenUseCase {
       await this.entitlementRepo.update(entitlement);
       await this.entitlementUpdateNotifier?.notify(entitlement);
       // Re-fetch to ensure we have fresh usage
-      const updated = await this.entitlementRepo.findByUserAndKey(userId, "token");
+      const updated = await this.entitlementRepo.findByUserAndKey(
+        userId,
+        "token",
+      );
       if (!updated?.usage) {
         throw new DomainError(`Token entitlement is not usage-based`);
       }
@@ -103,11 +108,12 @@ export class ChargeTokenUseCase {
 
     // Check if user has enough tokens
     const requiredAmount = price.amount;
-    const availableTokens = entitlement.usage.getEffectiveLimit() - entitlement.usage.used;
+    const availableTokens =
+      entitlement.usage.getEffectiveLimit() - entitlement.usage.used;
 
     if (availableTokens < requiredAmount) {
       const error = new DomainError(
-        `Insufficient tokens. Required: ${requiredAmount}, Available: ${availableTokens}`
+        `Insufficient tokens. Required: ${requiredAmount}, Available: ${availableTokens}`,
       );
       (error as any).code = "INSUFFICIENT_FUNDS";
       throw error;
@@ -122,16 +128,21 @@ export class ChargeTokenUseCase {
     const paymentIntentId = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     // Apply product entitlements directly (no SQS) so the user gets access immediately
-    await this.applyProductEntitlementsForOneTime(userId, product, ROLE_LEARNER);
+    await this.applyProductEntitlementsForOneTime(
+      userId,
+      product,
+      ROLE_LEARNER,
+    );
 
     // Get final token balance
     const finalEntitlement = await this.entitlementRepo.findByUserAndKey(
       userId,
-      "token"
+      "token",
     );
     const remainingTokens =
       finalEntitlement && finalEntitlement.usage
-        ? finalEntitlement.usage.getEffectiveLimit() - finalEntitlement.usage.used
+        ? finalEntitlement.usage.getEffectiveLimit() -
+          finalEntitlement.usage.used
         : 0;
 
     return {
@@ -149,13 +160,13 @@ export class ChargeTokenUseCase {
   private async applyProductEntitlementsForOneTime(
     userId: string,
     product: { productId: string; entitlements: readonly string[] },
-    role: "learner"
+    role: "learner",
   ): Promise<void> {
     for (const key of product.entitlements) {
       const entitlementKey = key as EntitlementKey;
       const existing = await this.entitlementRepo.findByUserAndKey(
         userId,
-        entitlementKey
+        entitlementKey,
       );
       if (existing) {
         existing.status = EntitlementStatus.ACTIVE;
