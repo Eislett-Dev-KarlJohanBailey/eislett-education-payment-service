@@ -9,6 +9,7 @@ import {
   DomainError,
   type EntitlementUpdateNotifier,
 } from "@libs/domain";
+import { ProcessedTokenChargesRepository } from "../../infrastructure/processed-token-charges.repository";
 
 class NotFoundError extends DomainError {
   constructor(message: string) {
@@ -20,6 +21,7 @@ class NotFoundError extends DomainError {
 export interface ChargeTokenInput {
   userId: string;
   priceId: string;
+  idempotencyKey?: string;
 }
 
 export interface ChargeTokenOutput {
@@ -39,10 +41,22 @@ export class ChargeTokenUseCase {
     private readonly createEntitlementUseCase: CreateEntitlementUseCase,
     private readonly syncProductLimitsUseCase: SyncProductLimitsToEntitlementsUseCase,
     private readonly entitlementUpdateNotifier?: EntitlementUpdateNotifier,
+    private readonly processedTokenChargesRepo?: ProcessedTokenChargesRepository,
   ) {}
 
   async execute(input: ChargeTokenInput): Promise<ChargeTokenOutput> {
-    const { userId, priceId } = input;
+    const { userId, priceId, idempotencyKey } = input;
+
+    // check for cached response first before doing any processing, to handle duplicated requests with same idempotency key
+    if (idempotencyKey && this.processedTokenChargesRepo) {
+      const cachedResponse =
+        await this.processedTokenChargesRepo.getCachedResponse<ChargeTokenOutput>(
+          idempotencyKey,
+        );
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+    }
 
     // Get price
     const price = await this.priceRepo.findById(priceId);
@@ -83,6 +97,18 @@ export class ChargeTokenUseCase {
 
     if (!entitlement.usage) {
       throw new DomainError(`Token entitlement is not usage-based`);
+    }
+
+    // Check rate limit before mutating any token state
+    if (this.processedTokenChargesRepo) {
+      const canCharge = await this.processedTokenChargesRepo.canCharge(userId);
+      if (!canCharge) {
+        const error = new DomainError(
+          `Token purchases are rate limited for user '${userId}'`,
+        );
+        (error as any).code = "RATE_LIMITED";
+        throw error;
+      }
     }
 
     // Lazy evaluation: reset usage if period has passed
@@ -145,12 +171,25 @@ export class ChargeTokenUseCase {
           finalEntitlement.usage.used
         : 0;
 
-    return {
+    const result: ChargeTokenOutput = {
       success: true,
       paymentIntentId,
       amount: requiredAmount,
       remainingTokens,
     };
+
+    if (idempotencyKey && this.processedTokenChargesRepo) {
+      await this.processedTokenChargesRepo.saveCachedResponse(
+        idempotencyKey,
+        result,
+      );
+    }
+
+    if (this.processedTokenChargesRepo) {
+      await this.processedTokenChargesRepo.recordCharge(userId);
+    }
+
+    return result;
   }
 
   /**

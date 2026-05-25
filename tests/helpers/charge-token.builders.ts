@@ -68,6 +68,16 @@ export type ChargeTokenDeps = {
   notifier: {
     notify: jest.MockedFunction<(entitlement: Entitlement) => Promise<void>>;
   };
+  processedTokenChargesRepo: {
+    getCachedResponse: jest.MockedFunction<
+      (idempotencyKey: string) => Promise<any>
+    >;
+    saveCachedResponse: jest.MockedFunction<
+      (idempotencyKey: string, response: unknown) => Promise<void>
+    >;
+    canCharge: jest.MockedFunction<(userId: string) => Promise<boolean>>;
+    recordCharge: jest.MockedFunction<(userId: string) => Promise<void>>;
+  };
   entitlementStore: Map<string, Entitlement>;
 };
 
@@ -199,6 +209,17 @@ export function buildChargeTokenUseCase(): ChargeTokenDeps {
   } as unknown as ChargeTokenDeps["productRepo"] &
     ProductRepositoryPorts.ProductRepository;
 
+  const processedTokenChargesRepo = {
+    getCachedResponse: jest.fn(),
+    saveCachedResponse: jest.fn(),
+    canCharge: jest.fn(),
+    recordCharge: jest.fn(),
+  } as unknown as ChargeTokenDeps["processedTokenChargesRepo"];
+  processedTokenChargesRepo.getCachedResponse.mockResolvedValue(null);
+  processedTokenChargesRepo.saveCachedResponse.mockResolvedValue(undefined);
+  processedTokenChargesRepo.canCharge.mockResolvedValue(true);
+  processedTokenChargesRepo.recordCharge.mockResolvedValue(undefined);
+
   const createEntitlementUseCase = {
     execute: jest.fn(async ({ userId, key, role, expiresAt }: any) => {
       const entitlement = new Entitlement(
@@ -230,6 +251,7 @@ export function buildChargeTokenUseCase(): ChargeTokenDeps {
     createEntitlementUseCase,
     syncProductLimitsUseCase,
     notifier,
+    processedTokenChargesRepo,
   );
 
   return {
@@ -240,6 +262,7 @@ export function buildChargeTokenUseCase(): ChargeTokenDeps {
     createEntitlementUseCase,
     syncProductLimitsUseCase,
     notifier,
+    processedTokenChargesRepo,
     entitlementStore,
   };
 }

@@ -27,10 +27,11 @@ import {
 } from "../helpers/localstack";
 let handler: (event: APIGatewayProxyEvent) => Promise<any>;
 
-function authHeaders(token: string) {
+function authHeaders(token: string, extraHeaders: Record<string, string> = {}) {
   return {
     ...createApiGatewayEvent().headers,
     Authorization: `Bearer ${token}`,
+    ...extraHeaders,
   };
 }
 
@@ -378,5 +379,145 @@ describe("Token Service Integration Tests", () => {
     const body = JSON.parse(result.body);
     expect(body.error).toBe("PAYMENT_REQUIRED");
     expect(body.message).toContain("Insufficient tokens");
+  });
+
+  it("does not double charge when the same idempotency key is reused", async () => {
+    const userId = `user-${Date.now()}`;
+    const productId = `product-${Date.now()}`;
+    const priceId = `price-${Date.now()}`;
+    const idempotencyKey = `idem-${Date.now()}`;
+
+    await createProduct(productRepo, [], {
+      productId,
+      name: "Idempotent Token Product",
+      type: ProductType.ONE_OFF,
+      entitlements: [EntitlementKey.SUBJECT_ACCESS],
+      usageLimits: [
+        {
+          metric: EntitlementKey.SUBJECT_ACCESS,
+          limit: 25,
+          period: "lifetime",
+        },
+      ],
+      isActive: true,
+    });
+
+    await seedPrice({
+      priceId,
+      productId,
+      amount: 30,
+      currency: "token",
+    });
+
+    await seedTokenEntitlement({
+      userId,
+      limit: 100,
+      used: 20,
+    });
+
+    const token = createJwtWithRole("learner", userId);
+
+    const event = createApiGatewayEvent({
+      httpMethod: "POST",
+      path: "/token/charge",
+      resource: "/token/charge",
+      headers: authHeaders(token, {
+        "Idempotency-Key": idempotencyKey,
+      }),
+      body: JSON.stringify({ priceId }),
+    });
+
+    const first = await handler(event);
+    const second = await handler(event);
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+
+    const firstBody = JSON.parse(first.body);
+    const secondBody = JSON.parse(second.body);
+
+    expect(secondBody.paymentIntentId).toBe(firstBody.paymentIntentId);
+    expect(secondBody.amount).toBe(30);
+    expect(secondBody.remainingTokens).toBe(50);
+
+    const tokenEntitlement = await entitlementRepo.findByUserAndKey(
+      userId,
+      "token",
+    );
+    expect(tokenEntitlement?.usage?.used).toBe(50);
+  });
+
+  it("returns 429 when the same user makes a second token purchase immediately", async () => {
+    const userId = `user-${Date.now()}`;
+    const productId = `product-${Date.now()}`;
+    const priceId = `price-${Date.now()}`;
+
+    await createProduct(productRepo, [], {
+      productId,
+      name: "Rate Limited Token Product",
+      type: ProductType.ONE_OFF,
+      entitlements: [EntitlementKey.SUBJECT_ACCESS],
+      usageLimits: [
+        {
+          metric: EntitlementKey.SUBJECT_ACCESS,
+          limit: 25,
+          period: "lifetime",
+        },
+      ],
+      isActive: true,
+    });
+
+    await seedPrice({
+      priceId,
+      productId,
+      amount: 10,
+      currency: "token",
+    });
+
+    await seedTokenEntitlement({
+      userId,
+      limit: 100,
+      used: 20,
+    });
+
+    const token = createJwtWithRole("learner", userId);
+
+    const first = await handler(
+      createApiGatewayEvent({
+        httpMethod: "POST",
+        path: "/token/charge",
+        resource: "/token/charge",
+        headers: authHeaders(token, {
+          "Idempotency-Key": `idem-a-${Date.now()}`,
+        }),
+        body: JSON.stringify({ priceId }),
+      }),
+    );
+
+    expect(first.statusCode).toBe(200);
+
+    const second = await handler(
+      createApiGatewayEvent({
+        httpMethod: "POST",
+        path: "/token/charge",
+        resource: "/token/charge",
+        headers: authHeaders(token, {
+          "Idempotency-Key": `idem-b-${Date.now()}`,
+        }),
+        body: JSON.stringify({ priceId }),
+      }),
+    );
+
+    expect(second.statusCode).toBe(429);
+
+    const body = JSON.parse(second.body);
+    expect(body.error).toBe("RATE_LIMITED");
+    expect(body.message).toContain("rate limited");
+
+    const tokenEntitlement = await entitlementRepo.findByUserAndKey(
+      userId,
+      "token",
+    );
+    expect(tokenEntitlement?.usage?.used).toBe(30);
   });
 });

@@ -111,6 +111,7 @@ describe("Token Service E2E", () => {
     await clearTable(TABLE_NAMES.products);
     await clearTable(TABLE_NAMES.prices);
     await clearTable(TABLE_NAMES.entitlements);
+    await clearTable(TABLE_NAMES.processedEvents, ["eventId"]);
   });
 
   afterAll(async () => {

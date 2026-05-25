@@ -328,4 +328,54 @@ describe("ChargeTokenUseCase", () => {
     expect(chargeToken.notifier.notify).toHaveBeenCalledTimes(1);
     expect(chargeToken.notifier.notify).toHaveBeenCalledWith(tokenEntitlement);
   });
+
+  it("returns a cached response for the same idempotency key", async () => {
+    const chargeToken = buildChargeTokenUseCase();
+    const cached = {
+      success: true,
+      paymentIntentId: "token_123",
+      amount: 30,
+      remainingTokens: 50,
+    };
+
+    chargeToken.processedTokenChargesRepo.getCachedResponse.mockResolvedValue(
+      cached,
+    );
+
+    const result = await chargeToken.useCase.execute({
+      userId: "user_1",
+      priceId: "price_1",
+      idempotencyKey: "idem-123",
+    });
+
+    expect(result).toEqual(cached);
+    expect(chargeToken.priceRepo.findById).not.toHaveBeenCalled();
+  });
+
+  it("throws RATE_LIMITED when the user is charging too frequently", async () => {
+    const chargeToken = buildChargeTokenUseCase();
+    chargeToken.processedTokenChargesRepo.getCachedResponse.mockResolvedValue(
+      null,
+    );
+    chargeToken.processedTokenChargesRepo.canCharge.mockResolvedValue(false);
+
+    const price = buildPrice({ amount: 10 });
+    const product = buildProduct();
+    const tokenEntitlement = buildTokenEntitlement({ limit: 100, used: 20 });
+
+    chargeToken.priceRepo.findById.mockResolvedValue(price);
+    chargeToken.productRepo.findById.mockResolvedValue(product);
+    chargeToken.entitlementStore.set("user_1::token", tokenEntitlement);
+
+    await expect(
+      chargeToken.useCase.execute({
+        userId: "user_1",
+        priceId: price.priceId,
+        idempotencyKey: "idem-123",
+      }),
+    ).rejects.toMatchObject({
+      name: "DomainError",
+      code: "RATE_LIMITED",
+    });
+  });
 });
