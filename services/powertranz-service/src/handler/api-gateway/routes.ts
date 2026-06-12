@@ -15,4 +15,7 @@ export const routes: Record<string, (req: RequestContext) => Promise<any>> = {
   "POST /powertranz/callback": powerTranzCallbackController.handle.bind(
     powerTranzCallbackController,
   ),
+  "GET /powertranz/callback": powerTranzCallbackController.handle.bind(
+    powerTranzCallbackController,
+  ),
 };

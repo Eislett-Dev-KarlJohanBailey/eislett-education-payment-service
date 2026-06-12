@@ -38,11 +38,24 @@ export class PowerTranzCallbackController {
       throw new ForbiddenError("Forbidden");
     }
 
-    if (!req.body || typeof req.body !== "object") {
+    const queryPayload = { ...(req.query ?? {}) };
+    delete queryPayload.secret;
+
+    const bodyPayload =
+      req.body && typeof req.body === "object"
+        ? (req.body as Record<string, unknown>)
+        : {};
+
+    const rawPayload = {
+      ...queryPayload,
+      ...bodyPayload,
+    };
+
+    if (Object.keys(rawPayload).length === 0) {
       throw new BadRequestError("Invalid payload");
     }
 
-    const payload = this.callbackPayload(req.body as Record<string, unknown>);
+    const payload = this.callbackPayload(rawPayload);
 
     const spiToken = String(
       payload.SpiToken || payload.spiToken || "",

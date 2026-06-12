@@ -1,6 +1,16 @@
 import { PowerTranzCallbackController } from "../../../services/powertranz-service/src/app/controllers/powertranz.callback.controller";
+import config from "../../../services/powertranz-service/src/config";
 
 describe("PowerTranzCallbackController", () => {
+  function callbackQuery(query: Record<string, string> = {}) {
+    return {
+      ...(config.powertranz.callbackSecret
+        ? { secret: config.powertranz.callbackSecret }
+        : {}),
+      ...query,
+    };
+  }
+
   function buildController() {
     const useCase = {
       execute: jest.fn().mockResolvedValue(undefined),
@@ -19,7 +29,7 @@ describe("PowerTranzCallbackController", () => {
       method: "POST",
       path: "/powertranz/callback",
       pathParams: {},
-      query: {},
+      query: callbackQuery(),
       headers: {},
       body: {
         Response: JSON.stringify({
@@ -41,6 +51,35 @@ describe("PowerTranzCallbackController", () => {
     });
   });
 
+  it("accepts PowerTranz callback payload from query parameters", async () => {
+    const { controller, useCase } = buildController();
+
+    const result = await controller.handle({
+      method: "GET",
+      path: "/powertranz/callback",
+      pathParams: {},
+      query: callbackQuery({
+        Response: JSON.stringify({
+          SpiToken: "spi_query_123",
+          AuthenticationStatus: "Y",
+          IsoResponseCode: "3D0",
+        }),
+      }),
+      headers: {},
+      body: null,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(useCase.execute).toHaveBeenCalledWith({
+      spiToken: "spi_query_123",
+      rawPayload: expect.objectContaining({
+        SpiToken: "spi_query_123",
+        AuthenticationStatus: "Y",
+        IsoResponseCode: "3D0",
+      }),
+    });
+  });
+
   it("rejects an invalid Response JSON wrapper", async () => {
     const { controller, useCase } = buildController();
 
@@ -49,7 +88,7 @@ describe("PowerTranzCallbackController", () => {
         method: "POST",
         path: "/powertranz/callback",
         pathParams: {},
-        query: {},
+        query: callbackQuery(),
         headers: {},
         body: {
           Response: "{not-json",
