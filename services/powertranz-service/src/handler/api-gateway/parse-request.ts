@@ -9,7 +9,13 @@ export function parseRequest(event: APIGatewayProxyEvent): RequestContext {
     try {
       body = JSON.parse(event.body);
     } catch {
-      body = event.body;
+      const contentType =
+        event.headers?.["content-type"] || event.headers?.["Content-Type"] || "";
+      if (contentType.includes("application/x-www-form-urlencoded")) {
+        body = Object.fromEntries(new URLSearchParams(event.body));
+      } else {
+        body = event.body;
+      }
     }
   }
 

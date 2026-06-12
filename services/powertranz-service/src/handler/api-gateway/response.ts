@@ -2,11 +2,15 @@ import { APIGatewayProxyResult } from "aws-lambda";
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods":
+    "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
 };
 
-export function response(statusCode: number, body: unknown): APIGatewayProxyResult {
+export function response(
+  statusCode: number,
+  body: unknown,
+): APIGatewayProxyResult {
   return {
     statusCode,
     headers: {
@@ -17,17 +21,37 @@ export function response(statusCode: number, body: unknown): APIGatewayProxyResu
   };
 }
 
+function errorNameFromStatus(statusCode: number): string {
+  if (statusCode === 400) return "BAD_REQUEST";
+  if (statusCode === 401) return "UNAUTHORIZED";
+  if (statusCode === 403) return "FORBIDDEN";
+  if (statusCode === 404) return "NOT_FOUND";
+  return "ERROR";
+}
+
 export function errorResponse(error: any): APIGatewayProxyResult {
+  const statusCode =
+    typeof error?.statusCode === "number" ? error.statusCode : undefined;
+
+  if (statusCode) {
+    return response(statusCode, {
+      error: errorNameFromStatus(statusCode),
+      message: error.message || "Request failed",
+      ...(error.details ? { details: error.details } : {}),
+    });
+  }
+
   if (error?.name === "ValidationError") {
     return response(400, {
-      error: "VALIDATION_ERROR",
+      error: "BAD_REQUEST",
       message: error.message || "Validation failed",
+      ...(error.details ? { details: error.details } : {}),
     });
   }
 
   if (error?.name === "DomainError") {
     return response(400, {
-      error: "DOMAIN_ERROR",
+      error: "BAD_REQUEST",
       message: error.message || "Domain error",
     });
   }
