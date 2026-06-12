@@ -9,6 +9,9 @@ describe("CreatePaymentIntentUseCase", () => {
   beforeAll(async () => {
     process.env.POWERTRANZ_MERCHANT_RESPONSE_URL =
       "https://example.test/powertranz/callback";
+    delete process.env.POWERTRANZ_HPP_PAGE_SET;
+    delete process.env.POWERTRANZ_HPP_PAGE_NAME;
+
     const mod = await import(
       "../../../services/powertranz-service/src/app/usecases/create.payment.intent.usecase"
     );
@@ -93,7 +96,10 @@ describe("CreatePaymentIntentUseCase", () => {
         }),
         ExtendedData: expect.objectContaining({
           MerchantResponseUrl: "https://example.test/powertranz/callback",
-          HostedPage: {},
+          HostedPage: expect.objectContaining({
+            PageSet: "Basic",
+            PageName: "Simple",
+          }),
         }),
       }),
     );
