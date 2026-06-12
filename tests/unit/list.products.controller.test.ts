@@ -1,0 +1,153 @@
+import { ListProductsController } from "../../services/product-service/src/app/controllers/list.products.controller";
+import { jest } from "@jest/globals";
+
+function makeUseCase(
+  result: any = {
+    items: [],
+    total: 0,
+    pageNumber: 1,
+    pageSize: 20,
+  },
+) {
+  return {
+    execute: jest.fn(async () => result),
+  } as any;
+}
+
+describe("ListProductsController", () => {
+  it("flags active=true to isActive=true", async () => {
+    const useCase = makeUseCase({
+      items: [{ id: "1" }],
+      total: 1,
+      pageNumber: 1,
+      pageSize: 20,
+    });
+
+    const controller = new ListProductsController(useCase as any);
+
+    await controller.handle({
+      method: "GET",
+      path: "/products",
+      pathParams: {},
+      query: {
+        active: "true",
+        page_number: "2",
+        page_size: "5",
+      },
+      body: null,
+    } as any);
+
+    expect(useCase.execute).toHaveBeenCalledWith({
+      pageNumber: 2,
+      pageSize: 5,
+      type: undefined,
+      isActive: true,
+      entitlementKey: undefined,
+    });
+  });
+
+  it("flags active=false to isActive=false", async () => {
+    const useCase = makeUseCase({
+      items: [{ id: "1" }],
+      total: 1,
+      pageNumber: 1,
+      pageSize: 20,
+    });
+
+    const controller = new ListProductsController(useCase as any);
+
+    await controller.handle({
+      method: "GET",
+      path: "/products",
+      pathParams: {},
+      query: {
+        active: "false",
+      },
+      body: null,
+    } as any);
+
+    expect(useCase.execute).toHaveBeenCalledWith({
+      pageNumber: 1,
+      pageSize: 20,
+      type: undefined,
+      isActive: false,
+      entitlementKey: undefined,
+    });
+  });
+
+  it("supports entitlement_key", async () => {
+    const useCase = makeUseCase({
+      items: [{ id: "1" }],
+      total: 1,
+      pageNumber: 1,
+      pageSize: 20,
+    });
+
+    const controller = new ListProductsController(useCase as any);
+
+    await controller.handle({
+      method: "GET",
+      path: "/products",
+      pathParams: {},
+      query: {
+        entitlement_key: "subject_access",
+      },
+      body: null,
+    } as any);
+
+    expect(useCase.execute).toHaveBeenCalledWith({
+      pageNumber: 1,
+      pageSize: 20,
+      type: undefined,
+      isActive: undefined,
+      entitlementKey: "subject_access",
+    });
+  });
+
+  it("supports entitlementKey and ignores empty string", async () => {
+    const useCase = makeUseCase({
+      items: [{ id: "1" }],
+      total: 1,
+      pageNumber: 1,
+      pageSize: 20,
+    });
+
+    const controller = new ListProductsController(useCase as any);
+
+    await controller.handle({
+      method: "GET",
+      path: "/products",
+      pathParams: {},
+      query: {
+        entitlementKey: "token",
+      },
+      body: null,
+    } as any);
+
+    expect(useCase.execute).toHaveBeenCalledWith({
+      pageNumber: 1,
+      pageSize: 20,
+      type: undefined,
+      isActive: undefined,
+      entitlementKey: "token",
+    });
+
+    await controller.handle({
+      method: "GET",
+      path: "/products",
+      pathParams: {},
+      query: {
+        entitlement_key: "",
+      },
+      body: null,
+    } as any);
+
+    expect(useCase.execute).toHaveBeenLastCalledWith({
+      pageNumber: 1,
+      pageSize: 20,
+      type: undefined,
+      isActive: undefined,
+      entitlementKey: undefined,
+    });
+  });
+});

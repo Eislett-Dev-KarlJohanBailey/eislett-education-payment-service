@@ -1,7 +1,9 @@
 import { Product, ProductType, EntitlementKey } from "@libs/domain";
 
 describe("Product Entity", () => {
-  function makeProduct(overrides?: Partial<Parameters<typeof Product.create>[0]>) {
+  function makeProduct(
+    overrides?: Partial<Parameters<typeof Product.create>[0]>,
+  ) {
     return Product.create({
       productId: "prod-001",
       name: "Pro Plan",
@@ -38,6 +40,23 @@ describe("Product Entity", () => {
       const product = makeProduct();
       expect(product.providers).toEqual({});
     });
+
+    it("should reject usage limits that do not match entitlements", () => {
+      expect(() =>
+        makeProduct({
+          entitlements: [EntitlementKey.SUBJECT_ACCESS],
+          usageLimits: [
+            {
+              metric: "unknown_metric",
+              limit: 10,
+              period: "month",
+            },
+          ],
+        }),
+      ).toThrow(
+        "Usage limits must match entitlements. Invalid metrics: unknown_metric",
+      );
+    });
   });
 
   describe("behavior", () => {
@@ -67,10 +86,15 @@ describe("Product Entity", () => {
 
     it("should remove an entitlement", () => {
       const product = makeProduct({
-        entitlements: [EntitlementKey.SUBJECT_ACCESS, EntitlementKey.AI_TUTOR_ACCESS],
+        entitlements: [
+          EntitlementKey.SUBJECT_ACCESS,
+          EntitlementKey.AI_TUTOR_ACCESS,
+        ],
       });
       product.removeEntitlement(EntitlementKey.AI_TUTOR_ACCESS);
-      expect(product.entitlements).not.toContain(EntitlementKey.AI_TUTOR_ACCESS);
+      expect(product.entitlements).not.toContain(
+        EntitlementKey.AI_TUTOR_ACCESS,
+      );
       expect(product.entitlements).toContain(EntitlementKey.SUBJECT_ACCESS);
     });
 
@@ -85,6 +109,40 @@ describe("Product Entity", () => {
       product.addProvider("stripe", "prod_stripe_123");
       product.removeProvider("stripe");
       expect(product.providers.stripe).toBeUndefined();
+    });
+
+    it("should reject usage limits that do not match entitlements", () => {
+      expect(() =>
+        makeProduct({
+          entitlements: [EntitlementKey.SUBJECT_ACCESS],
+          usageLimits: [
+            {
+              metric: "unknown_metric",
+              limit: 10,
+              period: "month",
+            },
+          ],
+        }),
+      ).toThrow(
+        "Usage limits must match entitlements. Invalid metrics: unknown_metric",
+      );
+    });
+
+    it("should reject usage limits whose metric is not in entitlements", () => {
+      const product = makeProduct({
+        entitlements: [EntitlementKey.SUBJECT_ACCESS],
+        usageLimits: [],
+      });
+
+      expect(() =>
+        product.addUsageLimit({
+          metric: "nonexistent_entitlement",
+          limit: 10,
+          period: "month",
+        }),
+      ).toThrow(
+        "Usage limit metric 'nonexistent_entitlement' must match one of the product entitlements",
+      );
     });
   });
 });

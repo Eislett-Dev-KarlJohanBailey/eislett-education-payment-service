@@ -6,7 +6,10 @@ import {
   TABLE_NAMES,
 } from "../helpers/localstack";
 import { createApiGatewayEvent } from "../helpers/fixtures";
-import { createJwtWithRole, createExpiredJwt } from "../helpers/jwt-test-helper";
+import {
+  createJwtWithRole,
+  createExpiredJwt,
+} from "../helpers/jwt-test-helper";
 import {
   seedProductForEditDelete,
   seedProductsForByEntitlementTests,
@@ -14,7 +17,7 @@ import {
   SEED_PRODUCT_ID,
 } from "../helpers/product-service-seed";
 
-let handler: typeof import("../../services/product-service/src/handler/index")["handler"];
+let handler: (typeof import("../../services/product-service/src/handler/index"))["handler"];
 
 describe("Product Service E2E", () => {
   beforeAll(async () => {
@@ -23,9 +26,8 @@ describe("Product Service E2E", () => {
     process.env.JWT_ACCESS_TOKEN_SECRET =
       process.env.JWT_ACCESS_TOKEN_SECRET || "test-jwt-secret-for-e2e";
 
-    const mod = await import(
-      "../../services/product-service/src/handler/index"
-    );
+    const mod =
+      await import("../../services/product-service/src/handler/index");
     handler = mod.handler;
   });
 
@@ -55,7 +57,7 @@ describe("Product Service E2E", () => {
             ...createApiGatewayEvent().headers,
             Authorization: `Bearer ${token}`,
           },
-        })
+        }),
       );
     });
 
@@ -163,8 +165,12 @@ describe("Product Service E2E", () => {
       const data2 = JSON.parse(result2.body).data;
       expect(data1.length).toBeLessThanOrEqual(pageSize);
       expect(data2.length).toBeLessThanOrEqual(pageSize);
-      const ids1 = new Set<string>(data1.map((p: { productId: string }) => p.productId));
-      const ids2 = new Set<string>(data2.map((p: { productId: string }) => p.productId));
+      const ids1 = new Set<string>(
+        data1.map((p: { productId: string }) => p.productId),
+      );
+      const ids2 = new Set<string>(
+        data2.map((p: { productId: string }) => p.productId),
+      );
       ids1.forEach((id) => expect(ids2.has(id)).toBe(false));
     });
 
@@ -353,7 +359,7 @@ describe("Product Service E2E", () => {
             ...createApiGatewayEvent().headers,
             Authorization: `Bearer ${token}`,
           },
-        })
+        }),
       );
       const productId = JSON.parse(createRes.body).productId;
 
@@ -386,7 +392,7 @@ describe("Product Service E2E", () => {
             ...createApiGatewayEvent().headers,
             Authorization: `Bearer ${token}`,
           },
-        })
+        }),
       );
 
       const productId = JSON.parse(createRes.body).productId;
@@ -586,7 +592,15 @@ describe("Product Service E2E", () => {
       isActive: true,
     };
 
-    const forbiddenRoles = ["learner", "teacher", "educator", "support", "random-role", "ADMINISTRATORX", ""];
+    const forbiddenRoles = [
+      "learner",
+      "teacher",
+      "educator",
+      "support",
+      "random-role",
+      "ADMINISTRATORX",
+      "",
+    ];
 
     it.each(forbiddenRoles)(
       "returns 403 Forbidden when JWT role '%s' is not admin/administrator",
@@ -606,7 +620,7 @@ describe("Product Service E2E", () => {
         const result = await handler(event);
 
         expect(result.statusCode).toBe(403);
-      }
+      },
     );
 
     it("returns 201 and correct product when JWT role is admin", async () => {
@@ -635,6 +649,10 @@ describe("Product Service E2E", () => {
         path: `/products/${body.productId}`,
         resource: "/products/{id}",
         pathParameters: { id: body.productId },
+        headers: {
+          ...createApiGatewayEvent().headers,
+          Authorization: `Bearer ${token}`,
+        },
       });
       const getResult = await handler(getEvent);
       expect(getResult.statusCode).toBe(200);
@@ -672,6 +690,10 @@ describe("Product Service E2E", () => {
         path: `/products/${body.productId}`,
         resource: "/products/{id}",
         pathParameters: { id: body.productId },
+        headers: {
+          ...createApiGatewayEvent().headers,
+          Authorization: `Bearer ${token}`,
+        },
       });
       const getResult = await handler(getEvent);
       expect(getResult.statusCode).toBe(200);
@@ -719,6 +741,10 @@ describe("Product Service E2E", () => {
         path: `/products/${body.productId}`,
         resource: "/products/{id}",
         pathParameters: { id: body.productId },
+        headers: {
+          ...createApiGatewayEvent().headers,
+          Authorization: `Bearer ${token}`,
+        },
       });
       const getResult = await handler(getEvent);
       expect(getResult.statusCode).toBe(200);
@@ -727,7 +753,7 @@ describe("Product Service E2E", () => {
       expect(product.name).toBe(payloadWithUsage.name);
       expect(product.entitlements).toEqual(payloadWithUsage.entitlements);
       expect(product.usageLimits).toEqual(
-        expect.arrayContaining(payloadWithUsage.usageLimits)
+        expect.arrayContaining(payloadWithUsage.usageLimits),
       );
     });
 
@@ -840,15 +866,19 @@ describe("Product Service E2E", () => {
         path: `/products/${SEED_PRODUCT_ID}`,
         resource: "/products/{id}",
         pathParameters: { id: SEED_PRODUCT_ID },
+        headers: {
+          ...createApiGatewayEvent().headers,
+          Authorization: `Bearer ${token}`,
+        },
       });
       const getResult = await handler(getEvent);
       expect(getResult.statusCode).toBe(200);
       const product = JSON.parse(getResult.body);
       expect(product.entitlements).toEqual(
-        expect.arrayContaining(updatedEntitlements)
+        expect.arrayContaining(updatedEntitlements),
       );
       expect(product.usageLimits).toEqual(
-        expect.arrayContaining(updatedUsageLimits)
+        expect.arrayContaining(updatedUsageLimits),
       );
     });
 
@@ -961,7 +991,9 @@ describe("Product Service E2E", () => {
       expect(body).toHaveProperty("data");
       expect(Array.isArray(body.data)).toBe(true);
       expect(body.data.length).toBeGreaterThanOrEqual(2);
-      const productIds = body.data.map((p: { productId: string }) => p.productId);
+      const productIds = body.data.map(
+        (p: { productId: string }) => p.productId,
+      );
       expect(productIds).toContain("seed-by-ent-one-key");
       expect(productIds).toContain("seed-by-ent-two-keys");
     });
@@ -987,7 +1019,11 @@ describe("Product Service E2E", () => {
       expect(body).toHaveProperty("data");
       expect(Array.isArray(body.data)).toBe(true);
       expect(body.data.length).toBeGreaterThanOrEqual(1);
-      expect(body.data.some((p: { productId: string }) => p.productId === "seed-by-ent-two-keys")).toBe(true);
+      expect(
+        body.data.some(
+          (p: { productId: string }) => p.productId === "seed-by-ent-two-keys",
+        ),
+      ).toBe(true);
     });
 
     it("is not case sensitive for entitlement key", async () => {
@@ -1054,7 +1090,7 @@ describe("Product Service E2E", () => {
             ...createApiGatewayEvent().headers,
             Authorization: `Bearer ${token}`,
           },
-        })
+        }),
       );
       const resHyphen = await handler(
         createApiGatewayEvent({
@@ -1067,7 +1103,7 @@ describe("Product Service E2E", () => {
             ...createApiGatewayEvent().headers,
             Authorization: `Bearer ${token}`,
           },
-        })
+        }),
       );
       const resDot = await handler(
         createApiGatewayEvent({
@@ -1080,7 +1116,7 @@ describe("Product Service E2E", () => {
             ...createApiGatewayEvent().headers,
             Authorization: `Bearer ${token}`,
           },
-        })
+        }),
       );
 
       expect(resUnderscore.statusCode).toBe(200);
