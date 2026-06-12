@@ -12,6 +12,10 @@ export interface HandlePowerTranzCallbackInput {
   rawPayload: Record<string, unknown>;
 }
 
+export interface HandlePowerTranzCallbackOutput {
+  status: "success" | "cancel";
+}
+
 export class HandlePowerTranzCallbackUseCase {
   constructor(
     private readonly powerTranzClient: PowerTranzClient,
@@ -21,16 +25,22 @@ export class HandlePowerTranzCallbackUseCase {
     private readonly transactionRepo: TransactionRepository,
   ) {}
 
-  async execute(input: HandlePowerTranzCallbackInput): Promise<void> {
+  async execute(
+    input: HandlePowerTranzCallbackInput,
+  ): Promise<HandlePowerTranzCallbackOutput> {
     const intent = await this.paymentIntentRepo.findBySpiToken(input.spiToken);
 
     if (!intent) {
-      return;
+      return { status: "cancel" };
     }
 
-    if (intent.status === "completed" || intent.status === "failed") {
+    if (intent.status === "completed") {
       // idempotency check - if we've already processed this callback, do nothing
-      return;
+      return { status: "success" };
+    }
+
+    if (intent.status === "failed") {
+      return { status: "cancel" };
     }
 
     const riskManagement = input.rawPayload.RiskManagement as
@@ -79,7 +89,7 @@ export class HandlePowerTranzCallbackUseCase {
         });
       }
 
-      return;
+      return { status: "cancel" };
     }
 
     let paymentResult: unknown;
@@ -109,7 +119,7 @@ export class HandlePowerTranzCallbackUseCase {
         });
       }
 
-      return;
+      return { status: "cancel" };
     }
 
     const iso = String(
@@ -140,7 +150,7 @@ export class HandlePowerTranzCallbackUseCase {
         });
       }
 
-      return;
+      return { status: "cancel" };
     }
 
     const transactionId =
@@ -197,5 +207,7 @@ export class HandlePowerTranzCallbackUseCase {
         },
       });
     }
+
+    return { status: "success" };
   }
 }

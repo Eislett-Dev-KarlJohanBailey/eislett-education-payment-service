@@ -21,6 +21,25 @@ export function response(
   };
 }
 
+export function redirect(location: string): APIGatewayProxyResult {
+  return {
+    statusCode: 303,
+    headers: {
+      Location: location,
+      ...corsHeaders,
+    },
+    body: "",
+  };
+}
+
+export function isProxyResult(value: unknown): value is APIGatewayProxyResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  return typeof (value as APIGatewayProxyResult).statusCode === "number";
+}
+
 function errorNameFromStatus(statusCode: number): string {
   if (statusCode === 400) return "BAD_REQUEST";
   if (statusCode === 401) return "UNAUTHORIZED";

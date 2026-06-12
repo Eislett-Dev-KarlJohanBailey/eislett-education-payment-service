@@ -1,12 +1,19 @@
 import { RequestContext } from "../../handler/api-gateway/types";
-import { ForbiddenError } from "@libs/domain";
 import config from "../../config";
 import { HandlePowerTranzCallbackUseCase } from "../usecases/handle.powertranz.callback.usecase";
-import { BadRequestError } from "../errors/bad-request.error";
+import { redirect } from "../../handler/api-gateway/response";
 
 export class PowerTranzCallbackController {
   // for accepting the powertranz callback payload and then sends it to the usecase
   constructor(private readonly useCase: HandlePowerTranzCallbackUseCase) {}
+
+  private successRedirect() {
+    return redirect("/billing?payment=success");
+  }
+
+  private cancelRedirect() {
+    return redirect("/?payment=cancel");
+  }
 
   private callbackPayload(body: Record<string, unknown>): Record<string, unknown> {
     const responseRaw = body.Response;
@@ -22,7 +29,7 @@ export class PowerTranzCallbackController {
         SpiToken: body.SpiToken ?? parsed.SpiToken,
       };
     } catch {
-      throw new BadRequestError("Invalid callback payload: Response is not valid JSON");
+      throw new Error("Invalid callback payload: Response is not valid JSON");
     }
   }
 
@@ -35,7 +42,7 @@ export class PowerTranzCallbackController {
       headerSecret !== config.powertranz.callbackSecret &&
       querySecret !== config.powertranz.callbackSecret
     ) {
-      throw new ForbiddenError("Forbidden");
+      return this.cancelRedirect();
     }
 
     const queryPayload = { ...(req.query ?? {}) };
@@ -52,23 +59,34 @@ export class PowerTranzCallbackController {
     };
 
     if (Object.keys(rawPayload).length === 0) {
-      throw new BadRequestError("Invalid payload");
+      return this.cancelRedirect();
     }
 
-    const payload = this.callbackPayload(rawPayload);
+    let payload: Record<string, unknown>;
+    try {
+      payload = this.callbackPayload(rawPayload);
+    } catch {
+      return this.cancelRedirect();
+    }
 
     const spiToken = String(
       payload.SpiToken || payload.spiToken || "",
     ).trim();
     if (!spiToken) {
-      throw new BadRequestError("SpiToken is required in payload");
+      return this.cancelRedirect();
     }
 
-    await this.useCase.execute({
-      spiToken,
-      rawPayload: payload,
-    });
+    try {
+      const result = await this.useCase.execute({
+        spiToken,
+        rawPayload: payload,
+      });
 
-    return { ok: true };
+      return result.status === "success"
+        ? this.successRedirect()
+        : this.cancelRedirect();
+    } catch {
+      return this.cancelRedirect();
+    }
   };
 }

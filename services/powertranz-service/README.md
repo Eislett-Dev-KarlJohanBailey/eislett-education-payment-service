@@ -20,6 +20,7 @@ This service is the Powertranz payment service for this repo. It follows the sam
 2. The client renders/submits the returned `hostedPaymentPageHtml` (also available as `redirectData`) so the buyer can finish the hosted-page and 3DS steps. Do not redirect the buyer directly to `/powertranz/callback`; that URL is only the PowerTranz `MerchantResponseUrl`.
 3. PowerTranz posts the browser return to `/powertranz/callback`.
 4. The callback handler posts the SPI token to `/api/spi/payment`; an approved `00` response marks the intent complete and publishes the billing event.
+5. The callback redirects the browser to `/billing?payment=success` when payment completes, or `/?payment=cancel` when the callback cannot be completed.
 
 ## Environment
 

@@ -13,7 +13,7 @@ describe("PowerTranzCallbackController", () => {
 
   function buildController() {
     const useCase = {
-      execute: jest.fn().mockResolvedValue(undefined),
+      execute: jest.fn().mockResolvedValue({ status: "success" }),
     };
 
     return {
@@ -40,7 +40,15 @@ describe("PowerTranzCallbackController", () => {
       },
     });
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual(
+      expect.objectContaining({
+        statusCode: 303,
+        headers: expect.objectContaining({
+          Location: "/billing?payment=success",
+        }),
+        body: "",
+      }),
+    );
     expect(useCase.execute).toHaveBeenCalledWith({
       spiToken: "spi_123",
       rawPayload: expect.objectContaining({
@@ -69,7 +77,15 @@ describe("PowerTranzCallbackController", () => {
       body: null,
     });
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual(
+      expect.objectContaining({
+        statusCode: 303,
+        headers: expect.objectContaining({
+          Location: "/billing?payment=success",
+        }),
+        body: "",
+      }),
+    );
     expect(useCase.execute).toHaveBeenCalledWith({
       spiToken: "spi_query_123",
       rawPayload: expect.objectContaining({
@@ -80,22 +96,56 @@ describe("PowerTranzCallbackController", () => {
     });
   });
 
-  it("rejects an invalid Response JSON wrapper", async () => {
+  it("redirects to cancel for an invalid Response JSON wrapper", async () => {
     const { controller, useCase } = buildController();
 
-    await expect(
-      controller.handle({
-        method: "POST",
-        path: "/powertranz/callback",
-        pathParams: {},
-        query: callbackQuery(),
-        headers: {},
-        body: {
-          Response: "{not-json",
-        },
+    const result = await controller.handle({
+      method: "POST",
+      path: "/powertranz/callback",
+      pathParams: {},
+      query: callbackQuery(),
+      headers: {},
+      body: {
+        Response: "{not-json",
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        statusCode: 303,
+        headers: expect.objectContaining({
+          Location: "/?payment=cancel",
+        }),
+        body: "",
       }),
-    ).rejects.toThrow("Invalid callback payload");
+    );
 
     expect(useCase.execute).not.toHaveBeenCalled();
+  });
+
+  it("redirects to cancel when callback processing fails", async () => {
+    const { controller, useCase } = buildController();
+    useCase.execute.mockResolvedValue({ status: "cancel" });
+
+    const result = await controller.handle({
+      method: "POST",
+      path: "/powertranz/callback",
+      pathParams: {},
+      query: callbackQuery(),
+      headers: {},
+      body: {
+        SpiToken: "spi_123",
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        statusCode: 303,
+        headers: expect.objectContaining({
+          Location: "/?payment=cancel",
+        }),
+        body: "",
+      }),
+    );
   });
 });
