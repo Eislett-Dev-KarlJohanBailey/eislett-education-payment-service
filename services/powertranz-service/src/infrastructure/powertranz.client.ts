@@ -4,7 +4,11 @@ type FetchLike = typeof fetch;
 
 interface PaymentResponse {
   SpiToken?: string;
+  spiToken?: string;
   RedirectData?: unknown;
+  Html?: unknown;
+  HTML?: unknown;
+  HostedPageHtml?: unknown;
   TransactionIdentifier?: string;
   OrderIdentifier?: string;
 }
@@ -55,6 +59,7 @@ export class PowerTranzClient {
   async createSaleSpiToken(payload: Record<string, unknown>): Promise<{
     spiToken: string;
     redirectData?: unknown;
+    hostedPaymentPageHtml?: string;
     transactionIdentifier?: string;
     orderIdentifier?: string;
   }> {
@@ -72,14 +77,23 @@ export class PowerTranzClient {
 
     const response = raw as PaymentResponse;
 
-    const spiToken = String(response.SpiToken ?? "").trim();
+    const spiToken = String(response.SpiToken ?? response.spiToken ?? "").trim();
     if (!spiToken) {
       throw new Error("PowerTranz auth response missing SpiToken");
     }
 
+    const hostedPaymentPageHtml = String(
+      response.RedirectData ??
+        response.Html ??
+        response.HTML ??
+        response.HostedPageHtml ??
+        "",
+    ).trim();
+
     return {
       spiToken,
       redirectData: response.RedirectData,
+      ...(hostedPaymentPageHtml ? { hostedPaymentPageHtml } : {}),
       transactionIdentifier: response.TransactionIdentifier,
       orderIdentifier: response.OrderIdentifier,
     };

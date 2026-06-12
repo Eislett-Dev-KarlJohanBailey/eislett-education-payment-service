@@ -31,6 +31,7 @@ describe("PowerTranzClient", () => {
     expect(result).toEqual({
       spiToken: "spi_123",
       redirectData: "<form>redirect</form>",
+      hostedPaymentPageHtml: "<form>redirect</form>",
       transactionIdentifier: "txn_123",
       orderIdentifier: "order_123",
     });

@@ -8,6 +8,24 @@ export class PowerTranzCallbackController {
   // for accepting the powertranz callback payload and then sends it to the usecase
   constructor(private readonly useCase: HandlePowerTranzCallbackUseCase) {}
 
+  private callbackPayload(body: Record<string, unknown>): Record<string, unknown> {
+    const responseRaw = body.Response;
+    if (typeof responseRaw !== "string" || !responseRaw.trim()) {
+      return body;
+    }
+
+    try {
+      const parsed = JSON.parse(responseRaw) as Record<string, unknown>;
+      return {
+        ...parsed,
+        ...body,
+        SpiToken: body.SpiToken ?? parsed.SpiToken,
+      };
+    } catch {
+      throw new BadRequestError("Invalid callback payload: Response is not valid JSON");
+    }
+  }
+
   handle = async (req: RequestContext) => {
     const headerSecret = req.headers?.["x-powertranz-callback-secret"];
     const querySecret = req.query?.secret;
@@ -24,14 +42,18 @@ export class PowerTranzCallbackController {
       throw new BadRequestError("Invalid payload");
     }
 
-    const spiToken = String((req.body as any).SpiToken || "").trim();
+    const payload = this.callbackPayload(req.body as Record<string, unknown>);
+
+    const spiToken = String(
+      payload.SpiToken || payload.spiToken || "",
+    ).trim();
     if (!spiToken) {
       throw new BadRequestError("SpiToken is required in payload");
     }
 
     await this.useCase.execute({
       spiToken,
-      rawPayload: req.body as Record<string, unknown>,
+      rawPayload: payload,
     });
 
     return { ok: true };

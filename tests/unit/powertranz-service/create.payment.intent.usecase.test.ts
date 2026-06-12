@@ -56,6 +56,7 @@ describe("CreatePaymentIntentUseCase", () => {
       createSaleSpiToken: jest.fn().mockResolvedValue({
         spiToken: "spi_123",
         redirectData: "<form>redirect</form>",
+        hostedPaymentPageHtml: "<form>redirect</form>",
         transactionIdentifier: "txn_123",
         orderIdentifier: "order_123",
       }),
@@ -97,7 +98,7 @@ describe("CreatePaymentIntentUseCase", () => {
         ExtendedData: expect.objectContaining({
           MerchantResponseUrl: "https://example.test/powertranz/callback",
           HostedPage: expect.objectContaining({
-            PageSet: "Basic",
+            PageSet: "PTZ/Basic",
             PageName: "Simple",
           }),
         }),
@@ -115,6 +116,7 @@ describe("CreatePaymentIntentUseCase", () => {
     expect(result).toEqual(
       expect.objectContaining({
         redirectData: "<form>redirect</form>",
+        hostedPaymentPageHtml: "<form>redirect</form>",
         spiToken: "spi_123",
         currency: "USD",
       }),

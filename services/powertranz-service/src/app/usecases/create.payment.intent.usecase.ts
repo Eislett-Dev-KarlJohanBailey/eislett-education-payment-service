@@ -21,6 +21,7 @@ export interface CreatePowerTranzPaymentIntentInput {
 
 export interface CreatePowerTranzPaymentIntentOutput {
   redirectData?: unknown;
+  hostedPaymentPageHtml?: string;
   spiToken: string;
   transactionIdentifier?: string;
   orderIdentifier?: string;
@@ -54,6 +55,15 @@ export class CreatePaymentIntentUseCase {
     return url.toString();
   }
 
+  private hostedPagePageSet(): string | undefined {
+    const pageSet = config.powertranz.hostedPagePageSet.trim();
+    if (!pageSet) {
+      return undefined;
+    }
+
+    return pageSet.startsWith("PTZ/") ? pageSet : `PTZ/${pageSet}`;
+  }
+
   async execute(
     input: CreatePowerTranzPaymentIntentInput,
   ): Promise<CreatePowerTranzPaymentIntentOutput> {
@@ -75,6 +85,7 @@ export class CreatePaymentIntentUseCase {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const transactionIdentifier = randomUUID();
     const orderIdentifier = `POWERTRANZ-${transactionIdentifier}`;
+    const pageSet = this.hostedPagePageSet();
 
     // PowerTranz Sale completes settlement after the browser returns and we post
     // the SPI token to /payment, so we do not need a separate capture step.
@@ -99,9 +110,7 @@ export class CreatePaymentIntentUseCase {
         },
         MerchantResponseUrl: this.merchantResponseUrl(),
         HostedPage: {
-          ...(config.powertranz.hostedPagePageSet
-            ? { PageSet: config.powertranz.hostedPagePageSet }
-            : {}),
+          ...(pageSet ? { PageSet: pageSet } : {}),
           ...(config.powertranz.hostedPagePageName
             ? { PageName: config.powertranz.hostedPagePageName }
             : {}),
@@ -129,6 +138,7 @@ export class CreatePaymentIntentUseCase {
 
     return {
       redirectData: sale.redirectData,
+      hostedPaymentPageHtml: sale.hostedPaymentPageHtml,
       spiToken: sale.spiToken,
       transactionIdentifier: intent.transactionId,
       orderIdentifier: intent.orderIdentifier,

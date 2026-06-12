@@ -138,7 +138,29 @@ locals {
     data.aws_secretsmanager_secret_version.jwt_access_token_secret.secret_string
   )
 
-  powertranz_merchant_response_url = "https://${data.terraform_remote_state.foundation.outputs.api_gateway_id}.execute-api.${data.aws_region.current.name}.amazonaws.com/powertranz/callback"
+  api_stage_name = lookup({
+    dev         = "dev"
+    development = "dev"
+    staging     = "staging"
+    prod        = "prod"
+    production  = "prod"
+    main        = "prod"
+  }, lower(var.environment), var.environment)
+
+  api_base_path = lookup({
+    dev         = "dev"
+    development = "dev"
+    staging     = "staging"
+    prod        = "v1"
+    production  = "v1"
+    main        = "v1"
+  }, lower(var.environment), local.api_stage_name)
+
+  api_custom_domain_url = try(trimsuffix(data.terraform_remote_state.foundation.outputs.api_custom_domain_url, "/"), "")
+  api_execute_url       = "https://${data.terraform_remote_state.foundation.outputs.api_gateway_id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${local.api_stage_name}"
+  api_base_url          = local.api_custom_domain_url != "" ? "${local.api_custom_domain_url}/${local.api_base_path}" : local.api_execute_url
+
+  powertranz_merchant_response_url = "${local.api_base_url}/powertranz/callback"
 }
 
 resource "aws_dynamodb_table" "powertranz_intents" {
