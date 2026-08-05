@@ -58,7 +58,7 @@ describe("CreatePaymentIntentUseCase", () => {
         redirectData: "<form>redirect</form>",
         hostedPaymentPageHtml: "<form>redirect</form>",
         transactionIdentifier: "txn_123",
-        orderIdentifier: "order_123",
+        orderIdentifier: "txn_123",
       }),
     };
     const paymentIntentRepo = {
@@ -105,7 +105,7 @@ describe("CreatePaymentIntentUseCase", () => {
         spiToken: "spi_123",
         currency: "USD",
         transactionId: "txn_123",
-        orderIdentifier: "order_123",
+        orderIdentifier: "txn_123",
         status: "pending_payment",
       }),
     );

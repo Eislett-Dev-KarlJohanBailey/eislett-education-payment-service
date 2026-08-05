@@ -84,7 +84,7 @@ export class CreatePaymentIntentUseCase {
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const transactionIdentifier = randomUUID();
-    const orderIdentifier = `POWERTRANZ-${transactionIdentifier}`;
+    const orderIdentifier = transactionIdentifier;
     const pageSet = this.hostedPagePageSet();
 
     const sale = await this.powerTranzClient.createAuthSpiToken({
