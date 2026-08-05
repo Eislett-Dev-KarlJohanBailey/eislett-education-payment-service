@@ -53,20 +53,20 @@ export class PowerTranzClient {
 
   private paymentHeaders(): Record<string, string> {
     return {
-      ...this.jsonHeaders(true),
-      "Content-Type": "text/plain",
+      ...this.jsonHeaders(false),
+      "Content-Type": "application/json",
       Accept: "application/json",
     };
   }
 
-  async createSaleSpiToken(payload: Record<string, unknown>): Promise<{
+  async createAuthSpiToken(payload: Record<string, unknown>): Promise<{
     spiToken: string;
     redirectData?: unknown;
     hostedPaymentPageHtml?: string;
     transactionIdentifier?: string;
     orderIdentifier?: string;
   }> {
-    const res = await this.fetchImpl(this.url("/api/spi/sale"), {
+    const res = await this.fetchImpl(this.url("/api/spi/auth"), {
       method: "POST",
       headers: this.jsonHeaders(true),
       body: JSON.stringify(payload),
@@ -106,7 +106,7 @@ export class PowerTranzClient {
     const res = await this.fetchImpl(this.url("/api/spi/payment"), {
       method: "POST",
       headers: this.paymentHeaders(),
-      body: spiToken,
+      body: JSON.stringify(spiToken),
     });
 
     const raw = await res.json().catch(() => null);

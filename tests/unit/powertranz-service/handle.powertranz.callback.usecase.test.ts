@@ -18,6 +18,7 @@ describe("HandlePowerTranzCallbackUseCase", () => {
   function buildUseCase() {
     const powerTranzClient = {
       chargePayment: jest.fn(),
+      capturePayment: jest.fn(),
     };
 
     const paymentIntentRepo = {
@@ -69,6 +70,13 @@ describe("HandlePowerTranzCallbackUseCase", () => {
       IsoResponseCode: "00",
       TransactionIdentifier: "txn_123",
       ResponseMessage: "Approved",
+      TotalAmount: 1500,
+      CurrencyCode: "840",
+    });
+    powerTranzClient.capturePayment.mockResolvedValue({
+      IsoResponseCode: "00",
+      TransactionIdentifier: "txn_123",
+      ResponseMessage: "Captured",
     });
 
     await useCase.execute({
@@ -81,6 +89,11 @@ describe("HandlePowerTranzCallbackUseCase", () => {
     });
 
     expect(powerTranzClient.chargePayment).toHaveBeenCalledWith("spi_123");
+    expect(powerTranzClient.capturePayment).toHaveBeenCalledWith({
+      TransactionIdentifier: "txn_123",
+      TotalAmount: 1500,
+      CurrencyCode: "840",
+    });
     expect(paymentIntentRepo.updateBySpiToken).toHaveBeenCalledWith(
       "spi_123",
       expect.objectContaining({
@@ -88,7 +101,7 @@ describe("HandlePowerTranzCallbackUseCase", () => {
         transactionId: "txn_123",
         paidAt: expect.any(String),
         isoResponseCode: "00",
-        responseMessage: "Approved",
+        responseMessage: "Captured",
       }),
     );
     expect(transactionRepo.save).toHaveBeenCalledTimes(1);
@@ -164,6 +177,7 @@ describe("HandlePowerTranzCallbackUseCase", () => {
     });
 
     expect(powerTranzClient.chargePayment).toHaveBeenCalledTimes(1);
+    expect(powerTranzClient.capturePayment).not.toHaveBeenCalled();
     expect(paymentIntentRepo.updateBySpiToken).toHaveBeenCalledWith(
       "spi_123",
       expect.objectContaining({
@@ -171,6 +185,58 @@ describe("HandlePowerTranzCallbackUseCase", () => {
         failedAt: expect.any(String),
         isoResponseCode: "05",
         responseMessage: "Declined",
+      }),
+    );
+    expect(emailQueue.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        template: "payment-failed.hbs",
+        to: "buyer@example.com",
+      }),
+    );
+    expect(transactionRepo.save).not.toHaveBeenCalled();
+    expect(billingEventPublisher.publish).not.toHaveBeenCalled();
+  });
+
+  it("marks the intent failed and queues a failure email when capture declines", async () => {
+    const {
+      useCase,
+      powerTranzClient,
+      paymentIntentRepo,
+      emailQueue,
+      billingEventPublisher,
+      transactionRepo,
+    } = buildUseCase();
+
+    powerTranzClient.chargePayment.mockResolvedValue({
+      IsoResponseCode: "00",
+      TransactionIdentifier: "txn_123",
+      ResponseMessage: "Approved",
+      TotalAmount: 1500,
+      CurrencyCode: "840",
+    });
+    powerTranzClient.capturePayment.mockResolvedValue({
+      IsoResponseCode: "05",
+      ResponseMessage: "Capture declined",
+      TransactionIdentifier: "txn_123",
+    });
+
+    await useCase.execute({
+      spiToken: "spi_123",
+      rawPayload: {
+        SpiToken: "spi_123",
+        AuthenticationStatus: "Y",
+        IsoResponseCode: "3D0",
+      },
+    });
+
+    expect(powerTranzClient.capturePayment).toHaveBeenCalledTimes(1);
+    expect(paymentIntentRepo.updateBySpiToken).toHaveBeenCalledWith(
+      "spi_123",
+      expect.objectContaining({
+        status: "failed",
+        failedAt: expect.any(String),
+        isoResponseCode: "05",
+        responseMessage: "Capture declined",
       }),
     );
     expect(emailQueue.send).toHaveBeenCalledWith(

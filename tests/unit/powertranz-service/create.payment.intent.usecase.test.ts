@@ -53,7 +53,7 @@ describe("CreatePaymentIntentUseCase", () => {
       execute: jest.fn().mockResolvedValue(product),
     };
     const powerTranzClient = {
-      createSaleSpiToken: jest.fn().mockResolvedValue({
+      createAuthSpiToken: jest.fn().mockResolvedValue({
         spiToken: "spi_123",
         redirectData: "<form>redirect</form>",
         hostedPaymentPageHtml: "<form>redirect</form>",
@@ -77,7 +77,7 @@ describe("CreatePaymentIntentUseCase", () => {
     };
   }
 
-  it("creates a hosted-page Sale request for USD", async () => {
+  it("creates a hosted-page Auth request for USD", async () => {
     const { useCase, powerTranzClient, paymentIntentRepo } = buildUseCase();
 
     const result = await useCase.execute({
@@ -86,21 +86,17 @@ describe("CreatePaymentIntentUseCase", () => {
       priceId: "price_1",
     });
 
-    expect(powerTranzClient.createSaleSpiToken).toHaveBeenCalledWith(
+    expect(powerTranzClient.createAuthSpiToken).toHaveBeenCalledWith(
       expect.objectContaining({
         TotalAmount: 19.99,
         CurrencyCode: "840",
-        ThreeDSecure: true,
-        Source: {},
+        ThreeDSecure: false,
         BillingAddress: expect.objectContaining({
           EmailAddress: "buyer@example.com",
         }),
         ExtendedData: expect.objectContaining({
           MerchantResponseUrl: "https://example.test/powertranz/callback",
-          HostedPage: expect.objectContaining({
-            PageSet: "PTZ/Basic",
-            PageName: "Simple",
-          }),
+          HostedPage: {},
         }),
       }),
     );
@@ -121,6 +117,55 @@ describe("CreatePaymentIntentUseCase", () => {
         currency: "USD",
       }),
     );
+  });
+
+  it("uses the explicitly configured hosted page when specified", async () => {
+    process.env.POWERTRANZ_HPP_PAGE_SET = "Checkout";
+    process.env.POWERTRANZ_HPP_PAGE_NAME = "SchoolPay";
+
+    jest.resetModules();
+    const mod = await import(
+      "../../../services/powertranz-service/src/app/usecases/create.payment.intent.usecase"
+    );
+    const ExplicitCreatePaymentIntentUseCase = mod.CreatePaymentIntentUseCase;
+
+    const powerTranzClient = {
+      createAuthSpiToken: jest.fn().mockResolvedValue({
+        spiToken: "spi_123",
+      }),
+    };
+
+    const useCase = new ExplicitCreatePaymentIntentUseCase(
+      { execute: jest.fn().mockResolvedValue(price) } as any,
+      { execute: jest.fn().mockResolvedValue(product) } as any,
+      powerTranzClient as any,
+      { save: jest.fn().mockResolvedValue(undefined) } as any,
+    );
+
+    await useCase.execute({
+      userId: "user_1",
+      userEmail: "buyer@example.com",
+      priceId: "price_1",
+    });
+
+    expect(powerTranzClient.createAuthSpiToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ExtendedData: expect.objectContaining({
+          HostedPage: {
+            PageSet: "PTZ/Checkout",
+            PageName: "SchoolPay",
+          },
+        }),
+      }),
+    );
+
+    delete process.env.POWERTRANZ_HPP_PAGE_SET;
+    delete process.env.POWERTRANZ_HPP_PAGE_NAME;
+    jest.resetModules();
+    const resetMod = await import(
+      "../../../services/powertranz-service/src/app/usecases/create.payment.intent.usecase"
+    );
+    CreatePaymentIntentUseCase = resetMod.CreatePaymentIntentUseCase;
   });
 
   it("rejects non-USD prices", async () => {

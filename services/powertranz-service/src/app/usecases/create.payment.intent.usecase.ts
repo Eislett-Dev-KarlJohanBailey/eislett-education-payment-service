@@ -87,14 +87,11 @@ export class CreatePaymentIntentUseCase {
     const orderIdentifier = `POWERTRANZ-${transactionIdentifier}`;
     const pageSet = this.hostedPagePageSet();
 
-    // PowerTranz Sale completes settlement after the browser returns and we post
-    // the SPI token to /payment, so we do not need a separate capture step.
-    const sale = await this.powerTranzClient.createSaleSpiToken({
+    const sale = await this.powerTranzClient.createAuthSpiToken({
       TransactionIdentifier: transactionIdentifier,
       TotalAmount: price.amount,
       CurrencyCode: "840",
-      ThreeDSecure: true,
-      Source: {},
+      ThreeDSecure: false,
       OrderIdentifier: orderIdentifier,
       BillingAddress: {
         FirstName: "Student",

@@ -156,8 +156,8 @@ export class HandlePowerTranzCallbackUseCase {
     let paymentResult: unknown;
 
     try {
-      // The browser return only proves 3DS finished. This server call is what
-      // asks PowerTranz to finalize the Sale and submit it for settlement.
+      // The browser return only proves the hosted-page / 3DS flow finished.
+      // We still need to complete the SPI payment server-side.
       paymentResult = await this.powerTranzClient.chargePayment(input.spiToken);
     } catch (error) {
       await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
@@ -246,8 +246,62 @@ export class HandlePowerTranzCallbackUseCase {
           .TransactionIdentifier ?? "",
       ).trim() || input.spiToken;
 
+    const captureResult = await this.powerTranzClient.capturePayment({
+      TransactionIdentifier: transactionId,
+      TotalAmount: Number(
+        (paymentResult as { TotalAmount?: number }).TotalAmount ?? intent.amount,
+      ),
+      CurrencyCode:
+        String(
+          (paymentResult as { CurrencyCode?: string }).CurrencyCode ?? "",
+        ).trim() || "840",
+    });
+
+    const captureIso = String(
+      (captureResult as { IsoResponseCode?: string }).IsoResponseCode ?? "",
+    ).trim();
+    const captureDetails = this.detailsPatch(
+      captureResult as Record<string, unknown>,
+      callbackAt,
+    );
+
+    if (captureIso !== "00") {
+      await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
+        ...captureDetails,
+        status: "failed",
+        failedAt: callbackAt,
+        approved: false,
+      });
+
+      if (intent.userEmail) {
+        await this.emailQueue.send({
+          template: "payment-failed.hbs",
+          header: "Payment failed",
+          to: intent.userEmail,
+          content: {
+            amount: intent.amount,
+            currency: intent.currency,
+            priceId: intent.priceId,
+            productId: intent.productId,
+            failureCode: captureIso,
+            failureReason: String(
+              (captureResult as { ResponseMessage?: string }).ResponseMessage ??
+                "Capture failed",
+            ),
+          },
+        });
+      }
+
+      return {
+        status: "cancel",
+        spiToken: intent.spiToken,
+        transactionId: captureDetails.transactionId ?? transactionId,
+        orderIdentifier: captureDetails.orderIdentifier ?? intent.orderIdentifier,
+      };
+    }
+
     await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
-      ...paymentDetails,
+      ...captureDetails,
       status: "completed",
       paidAt: callbackAt,
       approved: true,
@@ -301,8 +355,8 @@ export class HandlePowerTranzCallbackUseCase {
     return {
       status: "success",
       spiToken: intent.spiToken,
-      transactionId,
-      orderIdentifier: paymentDetails.orderIdentifier ?? intent.orderIdentifier,
+      transactionId: captureDetails.transactionId ?? transactionId,
+      orderIdentifier: captureDetails.orderIdentifier ?? intent.orderIdentifier,
     };
   }
 }
