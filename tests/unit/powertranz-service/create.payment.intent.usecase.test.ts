@@ -90,7 +90,7 @@ describe("CreatePaymentIntentUseCase", () => {
       expect.objectContaining({
         TotalAmount: 19.99,
         CurrencyCode: "780",
-        ThreeDSecure: true,
+        ThreeDSecure: false,
         ExtendedData: expect.objectContaining({
           MerchantResponseUrl: "https://example.test/powertranz/callback",
           HostedPage: {},

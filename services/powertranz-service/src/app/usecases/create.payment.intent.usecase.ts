@@ -90,14 +90,10 @@ export class CreatePaymentIntentUseCase {
       TransactionIdentifier: transactionIdentifier,
       TotalAmount: price.amount,
       CurrencyCode: POWERTRANZ_CURRENCY_CODE,
-      ThreeDSecure: true,
+      ThreeDSecure: false,
       OrderIdentifier: orderIdentifier,
       AddressMatch: false,
       ExtendedData: {
-        ThreeDSecure: {
-          ChallengeWindowSize: 4,
-          ChallengeIndicator: "01",
-        },
         MerchantResponseUrl: this.merchantResponseUrl(),
         HostedPage: {
           ...(pageSet ? { PageSet: pageSet } : {}),
