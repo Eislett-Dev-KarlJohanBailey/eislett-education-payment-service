@@ -128,7 +128,10 @@ export class HandlePowerTranzCallbackUseCase {
       .toUpperCase();
 
     const hasThreeDsSignal = authStatus.length > 0 || authIso.length > 0;
+    const hostedPagePreprocessingComplete = authIso === "HP0";
     const threeDsApproved = authStatus === "Y" && authIso === "3D0";
+    const canProceedToPayment =
+      hostedPagePreprocessingComplete || threeDsApproved;
     const callbackAt = new Date().toISOString();
 
     console.info("[HandlePowerTranzCallbackUseCase] callback auth state", {
@@ -136,10 +139,12 @@ export class HandlePowerTranzCallbackUseCase {
       authStatus,
       authIso,
       hasThreeDsSignal,
+      hostedPagePreprocessingComplete,
       threeDsApproved,
+      canProceedToPayment,
     });
 
-    if (hasThreeDsSignal && !threeDsApproved) {
+    if (hasThreeDsSignal && !canProceedToPayment) {
       await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
         ...this.detailsPatch(input.rawPayload, callbackAt),
         status: "failed",
