@@ -63,11 +63,26 @@ export class HandlePowerTranzCallbackUseCase {
   async execute(
     input: HandlePowerTranzCallbackInput,
   ): Promise<HandlePowerTranzCallbackOutput> {
+    console.info("[HandlePowerTranzCallbackUseCase] start", {
+      spiTokenPrefix: input.spiToken.slice(0, 12),
+    });
+
     const intent = await this.paymentIntentRepo.findBySpiToken(input.spiToken);
 
     if (!intent) {
+      console.warn("[HandlePowerTranzCallbackUseCase] intent not found", {
+        spiTokenPrefix: input.spiToken.slice(0, 12),
+      });
       return { status: "cancel", spiToken: input.spiToken };
     }
+
+    console.info("[HandlePowerTranzCallbackUseCase] intent loaded", {
+      spiTokenPrefix: intent.spiToken.slice(0, 12),
+      intentId: intent.id,
+      status: intent.status,
+      priceId: intent.priceId,
+      productId: intent.productId,
+    });
 
     if (intent.status === "completed") {
       // idempotency check - if we've already processed this callback, do nothing
@@ -115,6 +130,14 @@ export class HandlePowerTranzCallbackUseCase {
       authIso === "HP0" || (authStatus === "Y" && authIso === "3D0");
     const callbackAt = new Date().toISOString();
 
+    console.info("[HandlePowerTranzCallbackUseCase] callback auth state", {
+      intentId: intent.id,
+      authStatus,
+      authIso,
+      hasThreeDsSignal,
+      threeDsApproved,
+    });
+
     if (hasThreeDsSignal && !threeDsApproved) {
       await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
         ...this.detailsPatch(input.rawPayload, callbackAt),
@@ -159,7 +182,30 @@ export class HandlePowerTranzCallbackUseCase {
       // The browser return only proves the hosted-page / 3DS flow finished.
       // We still need to complete the SPI payment server-side.
       paymentResult = await this.powerTranzClient.chargePayment(input.spiToken);
+      console.info("[HandlePowerTranzCallbackUseCase] spi payment response", {
+        intentId: intent.id,
+        isoResponseCode: String(
+          (paymentResult as { IsoResponseCode?: string }).IsoResponseCode ?? "",
+        ).trim(),
+        responseMessage: String(
+          (paymentResult as { ResponseMessage?: string }).ResponseMessage ?? "",
+        ).trim(),
+        approved: (paymentResult as { Approved?: unknown }).Approved,
+        transactionIdentifier: String(
+          (paymentResult as { TransactionIdentifier?: string })
+            .TransactionIdentifier ?? "",
+        ).trim(),
+        orderIdentifier: String(
+          (paymentResult as { OrderIdentifier?: string }).OrderIdentifier ?? "",
+        ).trim(),
+        transactionType: (paymentResult as { TransactionType?: unknown })
+          .TransactionType,
+      });
     } catch (error) {
+      console.error("[HandlePowerTranzCallbackUseCase] spi payment request failed", {
+        intentId: intent.id,
+        message: error instanceof Error ? error.message : "PowerTranz failed",
+      });
       await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
         ...this.detailsPatch(input.rawPayload, callbackAt),
         status: "failed",
@@ -206,6 +252,13 @@ export class HandlePowerTranzCallbackUseCase {
     );
 
     if (iso !== "00") {
+      console.warn("[HandlePowerTranzCallbackUseCase] spi payment not approved", {
+        intentId: intent.id,
+        isoResponseCode: iso,
+        responseMessage: String(
+          (paymentResult as { ResponseMessage?: string }).ResponseMessage ?? "",
+        ).trim(),
+      });
       await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
         ...paymentDetails,
         status: "failed",
@@ -265,7 +318,30 @@ export class HandlePowerTranzCallbackUseCase {
       callbackAt,
     );
 
+    console.info("[HandlePowerTranzCallbackUseCase] capture response", {
+      intentId: intent.id,
+      transactionId,
+      isoResponseCode: captureIso,
+      responseMessage: String(
+        (captureResult as { ResponseMessage?: string }).ResponseMessage ?? "",
+      ).trim(),
+      approved: (captureResult as { Approved?: unknown }).Approved,
+      orderIdentifier: String(
+        (captureResult as { OrderIdentifier?: string }).OrderIdentifier ?? "",
+      ).trim(),
+      transactionType: (captureResult as { TransactionType?: unknown })
+        .TransactionType,
+    });
+
     if (captureIso !== "00") {
+      console.warn("[HandlePowerTranzCallbackUseCase] capture not approved", {
+        intentId: intent.id,
+        transactionId,
+        isoResponseCode: captureIso,
+        responseMessage: String(
+          (captureResult as { ResponseMessage?: string }).ResponseMessage ?? "",
+        ).trim(),
+      });
       await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
         ...captureDetails,
         status: "failed",
@@ -306,6 +382,12 @@ export class HandlePowerTranzCallbackUseCase {
       paidAt: callbackAt,
       approved: true,
       transactionId,
+    });
+
+    console.info("[HandlePowerTranzCallbackUseCase] payment completed", {
+      intentId: intent.id,
+      transactionId,
+      orderIdentifier: captureDetails.orderIdentifier ?? intent.orderIdentifier,
     });
 
     const billingEvent: BillingEvent.PaymentSuccessfulEvent = {

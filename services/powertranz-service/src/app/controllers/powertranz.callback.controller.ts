@@ -55,11 +55,21 @@ export class PowerTranzCallbackController {
     const headerSecret = req.headers?.["x-powertranz-callback-secret"];
     const querySecret = req.query?.secret;
 
+    console.info("[PowerTranzCallbackController] callback received", {
+      method: req.method,
+      path: req.path,
+      hasHeaderSecret: Boolean(headerSecret),
+      hasQuerySecret: Boolean(querySecret),
+      queryKeys: Object.keys(req.query ?? {}),
+      bodyType: typeof req.body,
+    });
+
     if (
       config.powertranz.callbackSecret &&
       headerSecret !== config.powertranz.callbackSecret &&
       querySecret !== config.powertranz.callbackSecret
     ) {
+      console.warn("[PowerTranzCallbackController] callback secret mismatch");
       return this.billingRedirect("cancel");
     }
 
@@ -84,6 +94,7 @@ export class PowerTranzCallbackController {
     try {
       payload = this.callbackPayload(rawPayload);
     } catch {
+      console.warn("[PowerTranzCallbackController] invalid callback payload");
       return this.billingRedirect("cancel");
     }
 
@@ -91,13 +102,30 @@ export class PowerTranzCallbackController {
       payload.SpiToken || payload.spiToken || "",
     ).trim();
     if (!spiToken) {
+      console.warn("[PowerTranzCallbackController] missing SpiToken");
       return this.billingRedirect("cancel");
     }
+
+    console.info("[PowerTranzCallbackController] callback parsed", {
+      spiTokenPrefix: spiToken.slice(0, 12),
+      transactionIdentifier: String(payload.TransactionIdentifier ?? "").trim(),
+      orderIdentifier: String(payload.OrderIdentifier ?? "").trim(),
+      isoResponseCode: String(payload.IsoResponseCode ?? "").trim(),
+      responseMessage: String(payload.ResponseMessage ?? "").trim(),
+      transactionType: payload.TransactionType,
+    });
 
     try {
       const result = await this.useCase.execute({
         spiToken,
         rawPayload: payload,
+      });
+
+      console.info("[PowerTranzCallbackController] callback completed", {
+        spiTokenPrefix: result.spiToken.slice(0, 12),
+        status: result.status,
+        transactionId: result.transactionId,
+        orderIdentifier: result.orderIdentifier,
       });
 
       return this.billingRedirect(result.status, {
@@ -106,6 +134,9 @@ export class PowerTranzCallbackController {
         orderIdentifier: result.orderIdentifier,
       });
     } catch {
+      console.error("[PowerTranzCallbackController] callback failed unexpectedly", {
+        spiTokenPrefix: spiToken.slice(0, 12),
+      });
       return this.billingRedirect("cancel", {
         spiToken,
         transactionId: String(payload.TransactionIdentifier ?? "").trim() || undefined,
