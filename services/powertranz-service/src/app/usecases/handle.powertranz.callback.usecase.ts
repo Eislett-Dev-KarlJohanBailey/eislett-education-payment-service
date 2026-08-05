@@ -14,6 +14,9 @@ export interface HandlePowerTranzCallbackInput {
 
 export interface HandlePowerTranzCallbackOutput {
   status: "success" | "cancel";
+  spiToken: string;
+  transactionId?: string;
+  orderIdentifier?: string;
 }
 
 export class HandlePowerTranzCallbackUseCase {
@@ -25,22 +28,64 @@ export class HandlePowerTranzCallbackUseCase {
     private readonly transactionRepo: TransactionRepository,
   ) {}
 
+  private stringValue(value: unknown): string | undefined {
+    const normalized = String(value ?? "").trim();
+    return normalized ? normalized : undefined;
+  }
+
+  private numberValue(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  }
+
+  private detailsPatch(source: Record<string, unknown>, at: string) {
+    const errors = Array.isArray(source.Errors)
+      ? (source.Errors as Array<Record<string, unknown>>)
+      : [];
+    const firstError = errors[0];
+
+    return {
+      lastCallbackAt: at,
+      transactionId: this.stringValue(source.TransactionIdentifier),
+      orderIdentifier: this.stringValue(source.OrderIdentifier),
+      approved:
+        typeof source.Approved === "boolean"
+          ? (source.Approved as boolean)
+          : undefined,
+      isoResponseCode: this.stringValue(source.IsoResponseCode),
+      responseMessage: this.stringValue(source.ResponseMessage),
+      cardBrand: this.stringValue(source.CardBrand),
+      transactionType: this.numberValue(source.TransactionType),
+      lastErrorCode: this.stringValue(firstError?.Code),
+      lastErrorMessage: this.stringValue(firstError?.Message),
+    };
+  }
+
   async execute(
     input: HandlePowerTranzCallbackInput,
   ): Promise<HandlePowerTranzCallbackOutput> {
     const intent = await this.paymentIntentRepo.findBySpiToken(input.spiToken);
 
     if (!intent) {
-      return { status: "cancel" };
+      return { status: "cancel", spiToken: input.spiToken };
     }
 
     if (intent.status === "completed") {
       // idempotency check - if we've already processed this callback, do nothing
-      return { status: "success" };
+      return {
+        status: "success",
+        spiToken: intent.spiToken,
+        transactionId: intent.transactionId,
+        orderIdentifier: intent.orderIdentifier,
+      };
     }
 
     if (intent.status === "failed") {
-      return { status: "cancel" };
+      return {
+        status: "cancel",
+        spiToken: intent.spiToken,
+        transactionId: intent.transactionId,
+        orderIdentifier: intent.orderIdentifier,
+      };
     }
 
     const riskManagement = input.rawPayload.RiskManagement as
@@ -68,10 +113,17 @@ export class HandlePowerTranzCallbackUseCase {
     const hasThreeDsSignal = authStatus.length > 0 || authIso.length > 0;
     const threeDsApproved =
       authIso === "HP0" || (authStatus === "Y" && authIso === "3D0");
+    const callbackAt = new Date().toISOString();
 
     if (hasThreeDsSignal && !threeDsApproved) {
       await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
+        ...this.detailsPatch(input.rawPayload, callbackAt),
         status: "failed",
+        failedAt: callbackAt,
+        approved: false,
+        responseMessage:
+          this.stringValue(input.rawPayload.ResponseMessage) ??
+          "3DS authentication failed",
       });
 
       if (intent.userEmail) {
@@ -89,7 +141,16 @@ export class HandlePowerTranzCallbackUseCase {
         });
       }
 
-      return { status: "cancel" };
+      return {
+        status: "cancel",
+        spiToken: intent.spiToken,
+        transactionId:
+          this.stringValue(input.rawPayload.TransactionIdentifier) ??
+          intent.transactionId,
+        orderIdentifier:
+          this.stringValue(input.rawPayload.OrderIdentifier) ??
+          intent.orderIdentifier,
+      };
     }
 
     let paymentResult: unknown;
@@ -100,7 +161,12 @@ export class HandlePowerTranzCallbackUseCase {
       paymentResult = await this.powerTranzClient.chargePayment(input.spiToken);
     } catch (error) {
       await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
+        ...this.detailsPatch(input.rawPayload, callbackAt),
         status: "failed",
+        failedAt: callbackAt,
+        approved: false,
+        responseMessage:
+          error instanceof Error ? error.message : "PowerTranz failed",
       });
 
       if (intent.userEmail) {
@@ -119,16 +185,32 @@ export class HandlePowerTranzCallbackUseCase {
         });
       }
 
-      return { status: "cancel" };
+      return {
+        status: "cancel",
+        spiToken: intent.spiToken,
+        transactionId:
+          this.stringValue(input.rawPayload.TransactionIdentifier) ??
+          intent.transactionId,
+        orderIdentifier:
+          this.stringValue(input.rawPayload.OrderIdentifier) ??
+          intent.orderIdentifier,
+      };
     }
 
     const iso = String(
       (paymentResult as { IsoResponseCode?: string }).IsoResponseCode ?? "",
     ); // checks if payment was approved, "00" means approved in PowerTranz
+    const paymentDetails = this.detailsPatch(
+      paymentResult as Record<string, unknown>,
+      callbackAt,
+    );
 
     if (iso !== "00") {
       await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
+        ...paymentDetails,
         status: "failed",
+        failedAt: callbackAt,
+        approved: false,
       });
 
       if (intent.userEmail) {
@@ -150,7 +232,12 @@ export class HandlePowerTranzCallbackUseCase {
         });
       }
 
-      return { status: "cancel" };
+      return {
+        status: "cancel",
+        spiToken: intent.spiToken,
+        transactionId: paymentDetails.transactionId ?? intent.transactionId,
+        orderIdentifier: paymentDetails.orderIdentifier ?? intent.orderIdentifier,
+      };
     }
 
     const transactionId =
@@ -160,7 +247,10 @@ export class HandlePowerTranzCallbackUseCase {
       ).trim() || input.spiToken;
 
     await this.paymentIntentRepo.updateBySpiToken(intent.spiToken, {
+      ...paymentDetails,
       status: "completed",
+      paidAt: callbackAt,
+      approved: true,
       transactionId,
     });
 
@@ -208,6 +298,11 @@ export class HandlePowerTranzCallbackUseCase {
       });
     }
 
-    return { status: "success" };
+    return {
+      status: "success",
+      spiToken: intent.spiToken,
+      transactionId,
+      orderIdentifier: paymentDetails.orderIdentifier ?? intent.orderIdentifier,
+    };
   }
 }

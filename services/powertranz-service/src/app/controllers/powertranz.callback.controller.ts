@@ -7,12 +7,30 @@ export class PowerTranzCallbackController {
   // for accepting the powertranz callback payload and then sends it to the usecase
   constructor(private readonly useCase: HandlePowerTranzCallbackUseCase) {}
 
-  private successRedirect() {
-    return redirect("/billing?payment=success");
-  }
+  private billingRedirect(
+    payment: "success" | "cancel",
+    details?: {
+      spiToken?: string;
+      transactionId?: string;
+      orderIdentifier?: string;
+    },
+  ) {
+    const url = new URL("/billing", "https://payments.is-ed.local");
+    url.searchParams.set("payment", payment);
 
-  private cancelRedirect() {
-    return redirect("/?payment=cancel");
+    if (details?.spiToken) {
+      url.searchParams.set("spiToken", details.spiToken);
+    }
+
+    if (details?.transactionId) {
+      url.searchParams.set("transactionIdentifier", details.transactionId);
+    }
+
+    if (details?.orderIdentifier) {
+      url.searchParams.set("orderIdentifier", details.orderIdentifier);
+    }
+
+    return redirect(`${url.pathname}${url.search}`);
   }
 
   private callbackPayload(body: Record<string, unknown>): Record<string, unknown> {
@@ -42,7 +60,7 @@ export class PowerTranzCallbackController {
       headerSecret !== config.powertranz.callbackSecret &&
       querySecret !== config.powertranz.callbackSecret
     ) {
-      return this.cancelRedirect();
+      return this.billingRedirect("cancel");
     }
 
     const queryPayload = { ...(req.query ?? {}) };
@@ -59,21 +77,21 @@ export class PowerTranzCallbackController {
     };
 
     if (Object.keys(rawPayload).length === 0) {
-      return this.cancelRedirect();
+      return this.billingRedirect("cancel");
     }
 
     let payload: Record<string, unknown>;
     try {
       payload = this.callbackPayload(rawPayload);
     } catch {
-      return this.cancelRedirect();
+      return this.billingRedirect("cancel");
     }
 
     const spiToken = String(
       payload.SpiToken || payload.spiToken || "",
     ).trim();
     if (!spiToken) {
-      return this.cancelRedirect();
+      return this.billingRedirect("cancel");
     }
 
     try {
@@ -82,11 +100,17 @@ export class PowerTranzCallbackController {
         rawPayload: payload,
       });
 
-      return result.status === "success"
-        ? this.successRedirect()
-        : this.cancelRedirect();
+      return this.billingRedirect(result.status, {
+        spiToken: result.spiToken,
+        transactionId: result.transactionId,
+        orderIdentifier: result.orderIdentifier,
+      });
     } catch {
-      return this.cancelRedirect();
+      return this.billingRedirect("cancel", {
+        spiToken,
+        transactionId: String(payload.TransactionIdentifier ?? "").trim() || undefined,
+        orderIdentifier: String(payload.OrderIdentifier ?? "").trim() || undefined,
+      });
     }
   };
 }

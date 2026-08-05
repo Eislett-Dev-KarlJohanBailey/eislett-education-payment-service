@@ -76,7 +76,9 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
     const normalizedPath = normalizePath(actualPath);
     const pathWithoutQuery = normalizedPath.split("?")[0];
 
-    const needsUser = pathWithoutQuery === "/powertranz/payment-intents";
+    const needsUser =
+      pathWithoutQuery === "/powertranz/payment-intents" ||
+      pathWithoutQuery === "/powertranz/invoices";
 
     const requestWithContext = {
       ...req,

@@ -86,6 +86,9 @@ describe("HandlePowerTranzCallbackUseCase", () => {
       expect.objectContaining({
         status: "completed",
         transactionId: "txn_123",
+        paidAt: expect.any(String),
+        isoResponseCode: "00",
+        responseMessage: "Approved",
       }),
     );
     expect(transactionRepo.save).toHaveBeenCalledTimes(1);
@@ -120,7 +123,11 @@ describe("HandlePowerTranzCallbackUseCase", () => {
     expect(powerTranzClient.chargePayment).not.toHaveBeenCalled();
     expect(paymentIntentRepo.updateBySpiToken).toHaveBeenCalledWith(
       "spi_123",
-      expect.objectContaining({ status: "failed" }),
+      expect.objectContaining({
+        status: "failed",
+        failedAt: expect.any(String),
+        approved: false,
+      }),
     );
     expect(emailQueue.send).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -159,7 +166,12 @@ describe("HandlePowerTranzCallbackUseCase", () => {
     expect(powerTranzClient.chargePayment).toHaveBeenCalledTimes(1);
     expect(paymentIntentRepo.updateBySpiToken).toHaveBeenCalledWith(
       "spi_123",
-      expect.objectContaining({ status: "failed" }),
+      expect.objectContaining({
+        status: "failed",
+        failedAt: expect.any(String),
+        isoResponseCode: "05",
+        responseMessage: "Declined",
+      }),
     );
     expect(emailQueue.send).toHaveBeenCalledWith(
       expect.objectContaining({

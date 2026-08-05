@@ -15,6 +15,8 @@ describe("PowerTranzClient", () => {
     const client = new PowerTranzClient(
       "https://staging.ptranz.com",
       fetchImpl as any,
+      "merchant_123",
+      "password_123",
     );
 
     const result = await client.createSaleSpiToken({
@@ -49,6 +51,8 @@ describe("PowerTranzClient", () => {
     const client = new PowerTranzClient(
       "https://staging.ptranz.com",
       fetchImpl as any,
+      "merchant_123",
+      "password_123",
     );
 
     await client.chargePayment("spi_123");
@@ -59,6 +63,8 @@ describe("PowerTranzClient", () => {
         method: "POST",
         headers: expect.objectContaining({
           "Content-Type": "text/plain",
+          "PowerTranz-PowerTranzId": "merchant_123",
+          "PowerTranz-PowerTranzPassword": "password_123",
         }),
         body: "spi_123",
       }),

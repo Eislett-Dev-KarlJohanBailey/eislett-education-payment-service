@@ -13,7 +13,9 @@ describe("PowerTranzCallbackController", () => {
 
   function buildController() {
     const useCase = {
-      execute: jest.fn().mockResolvedValue({ status: "success" }),
+      execute: jest
+        .fn()
+        .mockResolvedValue({ status: "success", spiToken: "spi_123" }),
     };
 
     return {
@@ -44,7 +46,7 @@ describe("PowerTranzCallbackController", () => {
       expect.objectContaining({
         statusCode: 303,
         headers: expect.objectContaining({
-          Location: "/billing?payment=success",
+          Location: "/billing?payment=success&spiToken=spi_123",
         }),
         body: "",
       }),
@@ -61,6 +63,10 @@ describe("PowerTranzCallbackController", () => {
 
   it("accepts PowerTranz callback payload from query parameters", async () => {
     const { controller, useCase } = buildController();
+    useCase.execute.mockResolvedValue({
+      status: "success",
+      spiToken: "spi_query_123",
+    });
 
     const result = await controller.handle({
       method: "GET",
@@ -81,7 +87,7 @@ describe("PowerTranzCallbackController", () => {
       expect.objectContaining({
         statusCode: 303,
         headers: expect.objectContaining({
-          Location: "/billing?payment=success",
+          Location: "/billing?payment=success&spiToken=spi_query_123",
         }),
         body: "",
       }),
@@ -114,7 +120,7 @@ describe("PowerTranzCallbackController", () => {
       expect.objectContaining({
         statusCode: 303,
         headers: expect.objectContaining({
-          Location: "/?payment=cancel",
+          Location: "/billing?payment=cancel",
         }),
         body: "",
       }),
@@ -125,7 +131,7 @@ describe("PowerTranzCallbackController", () => {
 
   it("redirects to cancel when callback processing fails", async () => {
     const { controller, useCase } = buildController();
-    useCase.execute.mockResolvedValue({ status: "cancel" });
+    useCase.execute.mockResolvedValue({ status: "cancel", spiToken: "spi_123" });
 
     const result = await controller.handle({
       method: "POST",
@@ -142,7 +148,7 @@ describe("PowerTranzCallbackController", () => {
       expect.objectContaining({
         statusCode: 303,
         headers: expect.objectContaining({
-          Location: "/?payment=cancel",
+          Location: "/billing?payment=cancel&spiToken=spi_123",
         }),
         body: "",
       }),

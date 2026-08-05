@@ -17,6 +17,8 @@ export class PowerTranzClient {
   constructor(
     private readonly baseUrl: string = config.powertranz.baseUrl,
     private readonly fetchImpl: FetchLike = fetch,
+    private readonly merchantId: string = config.powertranz.merchantId,
+    private readonly merchantPassword: string = config.powertranz.merchantPassword,
   ) {}
 
   private url(path: string): string {
@@ -37,13 +39,13 @@ export class PowerTranzClient {
       return headers;
     }
 
-    if (config.powertranz.merchantId) {
-      headers["PowerTranz-PowerTranzId"] = config.powertranz.merchantId;
+    if (this.merchantId) {
+      headers["PowerTranz-PowerTranzId"] = this.merchantId;
     }
 
-    if (config.powertranz.merchantPassword) {
+    if (this.merchantPassword) {
       headers["PowerTranz-PowerTranzPassword"] =
-        config.powertranz.merchantPassword;
+        this.merchantPassword;
     }
 
     return headers;
@@ -51,6 +53,7 @@ export class PowerTranzClient {
 
   private paymentHeaders(): Record<string, string> {
     return {
+      ...this.jsonHeaders(true),
       "Content-Type": "text/plain",
       Accept: "application/json",
     };
