@@ -24,7 +24,7 @@ describe("PowerTranzClient", () => {
     });
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      "https://staging.ptranz.com/api/spi/auth",
+      "https://staging.ptranz.com/Api/spi/Auth",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ TransactionIdentifier: "txn_123" }),
@@ -37,6 +37,27 @@ describe("PowerTranzClient", () => {
       transactionIdentifier: "txn_123",
       orderIdentifier: "order_123",
     });
+  });
+
+  it("rejects an auth response when preprocessing does not return SP4", async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        IsoResponseCode: "12",
+        ResponseMessage: "Invalid transaction",
+      }),
+    });
+
+    const client = new PowerTranzClient(
+      "https://staging.ptranz.com",
+      fetchImpl as any,
+      "merchant_123",
+      "password_123",
+    );
+
+    await expect(
+      client.createAuthSpiToken({ TransactionIdentifier: "txn_123" }),
+    ).rejects.toThrow("PowerTranz auth response not approved: 12 Invalid transaction");
   });
 
   it("posts the JSON stringified SPI token when completing payment", async () => {

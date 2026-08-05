@@ -91,9 +91,6 @@ describe("CreatePaymentIntentUseCase", () => {
         TotalAmount: 19.99,
         CurrencyCode: "840",
         ThreeDSecure: false,
-        BillingAddress: expect.objectContaining({
-          EmailAddress: "buyer@example.com",
-        }),
         ExtendedData: expect.objectContaining({
           MerchantResponseUrl: "https://example.test/powertranz/callback",
           HostedPage: {},

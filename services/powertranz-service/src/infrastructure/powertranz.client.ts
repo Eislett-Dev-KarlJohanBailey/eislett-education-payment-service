@@ -66,7 +66,7 @@ export class PowerTranzClient {
     transactionIdentifier?: string;
     orderIdentifier?: string;
   }> {
-    const res = await this.fetchImpl(this.url("/api/spi/auth"), {
+    const res = await this.fetchImpl(this.url("/Api/spi/Auth"), {
       method: "POST",
       headers: this.jsonHeaders(true),
       body: JSON.stringify(payload),
@@ -79,6 +79,17 @@ export class PowerTranzClient {
     }
 
     const response = raw as PaymentResponse;
+    const iso = String(
+      (raw as { IsoResponseCode?: string } | null)?.IsoResponseCode ?? "",
+    ).trim();
+
+    if (iso && iso !== "SP4") {
+      throw new Error(
+        `PowerTranz auth response not approved: ${iso} ${String(
+          (raw as { ResponseMessage?: string } | null)?.ResponseMessage ?? "",
+        ).trim()}`.trim(),
+      );
+    }
 
     const spiToken = String(response.SpiToken ?? response.spiToken ?? "").trim();
     if (!spiToken) {

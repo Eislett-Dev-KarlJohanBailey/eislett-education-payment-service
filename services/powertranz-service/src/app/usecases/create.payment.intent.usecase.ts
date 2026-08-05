@@ -93,12 +93,6 @@ export class CreatePaymentIntentUseCase {
       CurrencyCode: "840",
       ThreeDSecure: false,
       OrderIdentifier: orderIdentifier,
-      BillingAddress: {
-        FirstName: "Student",
-        LastName: "Customer",
-        CountryCode: "840",
-        ...(input.userEmail ? { EmailAddress: input.userEmail } : {}),
-      },
       AddressMatch: false,
       ExtendedData: {
         ThreeDSecure: {
