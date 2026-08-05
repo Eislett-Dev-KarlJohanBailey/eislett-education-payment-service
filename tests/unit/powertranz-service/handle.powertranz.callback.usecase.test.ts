@@ -92,7 +92,7 @@ describe("HandlePowerTranzCallbackUseCase", () => {
     expect(powerTranzClient.capturePayment).toHaveBeenCalledWith({
       TransactionIdentifier: "txn_123",
       TotalAmount: 1500,
-      CurrencyCode: "840",
+      CurrencyCode: "780",
     });
     expect(paymentIntentRepo.updateBySpiToken).toHaveBeenCalledWith(
       "spi_123",

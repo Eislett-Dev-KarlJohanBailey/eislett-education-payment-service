@@ -7,6 +7,8 @@ import {
 } from "../../infrastructure/powertranz.callback.effects";
 import { randomUUID } from "node:crypto";
 
+const POWERTRANZ_CURRENCY_CODE = "780";
+
 export interface HandlePowerTranzCallbackInput {
   spiToken: string;
   rawPayload: Record<string, unknown>;
@@ -303,10 +305,7 @@ export class HandlePowerTranzCallbackUseCase {
       TotalAmount: Number(
         (paymentResult as { TotalAmount?: number }).TotalAmount ?? intent.amount,
       ),
-      CurrencyCode:
-        String(
-          (paymentResult as { CurrencyCode?: string }).CurrencyCode ?? "",
-        ).trim() || "840",
+      CurrencyCode: POWERTRANZ_CURRENCY_CODE,
     });
 
     const captureIso = String(

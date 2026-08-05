@@ -17,7 +17,7 @@ This service is the Powertranz payment service for this repo. It follows the sam
 
 ## Payment flow
 
-1. `POST /powertranz/payment-intents` creates a PowerTranz hosted-page Auth SPI token for a USD one-time product.
+1. `POST /powertranz/payment-intents` creates a PowerTranz hosted-page Auth SPI token for a TTD one-time product.
 2. The client renders/submits the returned `hostedPaymentPageHtml` (also available as `redirectData`) so the buyer can finish the hosted-page and 3DS steps. Do not redirect the buyer directly to `/powertranz/callback`; that URL is only the PowerTranz `MerchantResponseUrl`.
 3. PowerTranz posts the browser return to `/powertranz/callback`.
 4. The callback handler posts the SPI token to `/api/spi/payment`, then calls `/api/capture`; approved `00` responses mark the intent complete and publish the billing event.

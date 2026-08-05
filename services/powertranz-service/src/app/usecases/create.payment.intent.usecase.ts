@@ -13,6 +13,9 @@ import {
 import { randomUUID } from "crypto";
 import { BadRequestError } from "../errors/bad-request.error";
 
+const POWERTRANZ_CURRENCY = "TTD";
+const POWERTRANZ_CURRENCY_CODE = "780";
+
 export interface CreatePowerTranzPaymentIntentInput {
   userId: string;
   userEmail?: string;
@@ -70,10 +73,6 @@ export class CreatePaymentIntentUseCase {
     const price = await this.getPriceUseCase.execute(input.priceId);
     const product = await this.getProductUseCase.execute(price.productId);
 
-    if (price.currency.toUpperCase() !== "USD") {
-      throw new BadRequestError("Only USD is supported");
-    }
-
     if (price.billingType !== BillingType.ONE_TIME) {
       throw new BadRequestError("Only one time payments are supported for now");
     }
@@ -90,7 +89,7 @@ export class CreatePaymentIntentUseCase {
     const sale = await this.powerTranzClient.createAuthSpiToken({
       TransactionIdentifier: transactionIdentifier,
       TotalAmount: price.amount,
-      CurrencyCode: "840",
+      CurrencyCode: POWERTRANZ_CURRENCY_CODE,
       ThreeDSecure: true,
       OrderIdentifier: orderIdentifier,
       AddressMatch: false,
@@ -117,7 +116,7 @@ export class CreatePaymentIntentUseCase {
       productId: price.productId,
       spiToken: sale.spiToken,
       amount: price.amount,
-      currency: price.currency,
+      currency: POWERTRANZ_CURRENCY,
       status: "pending_payment",
       expiresAt: expiresAt.toISOString(),
       createdAt: new Date().toISOString(),
@@ -135,7 +134,7 @@ export class CreatePaymentIntentUseCase {
       orderIdentifier: intent.orderIdentifier,
       expiresAt: expiresAt.toISOString(),
       amount: price.amount,
-      currency: price.currency,
+      currency: POWERTRANZ_CURRENCY,
       priceId: input.priceId,
       productId: price.productId,
     };

@@ -77,7 +77,7 @@ describe("CreatePaymentIntentUseCase", () => {
     };
   }
 
-  it("creates a hosted-page Auth request for USD", async () => {
+  it("creates a hosted-page Auth request for TTD", async () => {
     const { useCase, powerTranzClient, paymentIntentRepo } = buildUseCase();
 
     const result = await useCase.execute({
@@ -89,7 +89,7 @@ describe("CreatePaymentIntentUseCase", () => {
     expect(powerTranzClient.createAuthSpiToken).toHaveBeenCalledWith(
       expect.objectContaining({
         TotalAmount: 19.99,
-        CurrencyCode: "840",
+        CurrencyCode: "780",
         ThreeDSecure: true,
         ExtendedData: expect.objectContaining({
           MerchantResponseUrl: "https://example.test/powertranz/callback",
@@ -100,7 +100,7 @@ describe("CreatePaymentIntentUseCase", () => {
     expect(paymentIntentRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({
         spiToken: "spi_123",
-        currency: "USD",
+        currency: "TTD",
         transactionId: "txn_123",
         orderIdentifier: "txn_123",
         status: "pending_payment",
@@ -111,7 +111,7 @@ describe("CreatePaymentIntentUseCase", () => {
         redirectData: "<form>redirect</form>",
         hostedPaymentPageHtml: "<form>redirect</form>",
         spiToken: "spi_123",
-        currency: "USD",
+        currency: "TTD",
       }),
     );
   });
@@ -165,14 +165,9 @@ describe("CreatePaymentIntentUseCase", () => {
     CreatePaymentIntentUseCase = resetMod.CreatePaymentIntentUseCase;
   });
 
-  it("rejects non-USD prices", async () => {
+  it("forces PowerTranz requests to use TTD even when the source price currency differs", async () => {
     const { useCase } = buildUseCase();
-    jest
-      .spyOn((useCase as any).getPriceUseCase, "execute")
-      .mockResolvedValue({ ...price, currency: "TTD" });
-
-    await expect(
-      useCase.execute({ userId: "user_1", priceId: "price_1" }),
-    ).rejects.toThrow("Only USD is supported");
+    const result = await useCase.execute({ userId: "user_1", priceId: "price_1" });
+    expect(result.currency).toBe("TTD");
   });
 });
