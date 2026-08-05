@@ -126,8 +126,7 @@ export class HandlePowerTranzCallbackUseCase {
       .toUpperCase();
 
     const hasThreeDsSignal = authStatus.length > 0 || authIso.length > 0;
-    const threeDsApproved =
-      authIso === "HP0" || (authStatus === "Y" && authIso === "3D0");
+    const threeDsApproved = authStatus === "Y" && authIso === "3D0";
     const callbackAt = new Date().toISOString();
 
     console.info("[HandlePowerTranzCallbackUseCase] callback auth state", {
@@ -146,7 +145,7 @@ export class HandlePowerTranzCallbackUseCase {
         approved: false,
         responseMessage:
           this.stringValue(input.rawPayload.ResponseMessage) ??
-          "3DS authentication failed",
+          "3DS authentication was not completed",
       });
 
       if (intent.userEmail) {
@@ -159,7 +158,7 @@ export class HandlePowerTranzCallbackUseCase {
             currency: intent.currency,
             priceId: intent.priceId,
             productId: intent.productId,
-            failureReason: "3DS authentication failed",
+            failureReason: "3DS authentication was not completed",
           },
         });
       }

@@ -91,7 +91,7 @@ export class CreatePaymentIntentUseCase {
       TransactionIdentifier: transactionIdentifier,
       TotalAmount: price.amount,
       CurrencyCode: "840",
-      ThreeDSecure: false,
+      ThreeDSecure: true,
       OrderIdentifier: orderIdentifier,
       AddressMatch: false,
       ExtendedData: {

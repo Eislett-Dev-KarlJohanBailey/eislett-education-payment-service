@@ -152,6 +152,53 @@ describe("HandlePowerTranzCallbackUseCase", () => {
     expect(billingEventPublisher.publish).not.toHaveBeenCalled();
   });
 
+  it("does not complete payment when the callback only reports hosted-page preprocessing", async () => {
+    const {
+      useCase,
+      powerTranzClient,
+      paymentIntentRepo,
+      emailQueue,
+      billingEventPublisher,
+      transactionRepo,
+    } = buildUseCase();
+
+    const result = await useCase.execute({
+      spiToken: "spi_123",
+      rawPayload: {
+        SpiToken: "spi_123",
+        IsoResponseCode: "HP0",
+        ResponseMessage: "HPP preprocessing complete",
+      },
+    });
+
+    expect(result).toEqual({
+      status: "cancel",
+      spiToken: "spi_123",
+      transactionId: undefined,
+      orderIdentifier: undefined,
+    });
+    expect(powerTranzClient.chargePayment).not.toHaveBeenCalled();
+    expect(powerTranzClient.capturePayment).not.toHaveBeenCalled();
+    expect(paymentIntentRepo.updateBySpiToken).toHaveBeenCalledWith(
+      "spi_123",
+      expect.objectContaining({
+        status: "failed",
+        failedAt: expect.any(String),
+        approved: false,
+        isoResponseCode: "HP0",
+        responseMessage: "HPP preprocessing complete",
+      }),
+    );
+    expect(emailQueue.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        template: "payment-failed.hbs",
+        to: "buyer@example.com",
+      }),
+    );
+    expect(transactionRepo.save).not.toHaveBeenCalled();
+    expect(billingEventPublisher.publish).not.toHaveBeenCalled();
+  });
+
   it("marks the intent failed and queues a failure email when PowerTranz declines", async () => {
     const {
       useCase,

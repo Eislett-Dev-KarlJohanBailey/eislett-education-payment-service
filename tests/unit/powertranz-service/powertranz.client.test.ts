@@ -84,6 +84,8 @@ describe("PowerTranzClient", () => {
         method: "POST",
         headers: expect.objectContaining({
           "Content-Type": "application/json",
+          "PowerTranz-PowerTranzId": "merchant_123",
+          "PowerTranz-PowerTranzPassword": "password_123",
         }),
         body: JSON.stringify("spi_123"),
       }),
