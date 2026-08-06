@@ -1,7 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
-import { TransactionRepository } from "../app/ports/transaction.repository";
-import { Transaction } from "../domain/entities/transaction.entity";
+import { FindTransactionsOptions, TransactionRepository } from "../app/ports/transaction.repository";
+import { Transaction, TransactionProvider } from "../domain/entities/transaction.entity";
 
 export class DynamoTransactionRepository implements TransactionRepository {
   private readonly client: DynamoDBDocumentClient;
@@ -22,20 +22,34 @@ export class DynamoTransactionRepository implements TransactionRepository {
     );
   }
 
-  async findByUserId(userId: string, limit = 100): Promise<Transaction[]> {
-    const result = await this.client.send(
-      new QueryCommand({
-        TableName: this.tableName,
-        KeyConditionExpression: "PK = :pk",
-        ExpressionAttributeValues: {
-          ":pk": `USER#${userId}`,
-        },
-        ScanIndexForward: false, // Most recent first
-        Limit: limit,
-      })
-    );
+  async findByUserId(userId: string, options: FindTransactionsOptions = {}): Promise<Transaction[]> {
+    const { limit = 100, provider } = options;
+    const items: Record<string, any>[] = [];
+    let lastEvaluatedKey: Record<string, any> | undefined;
 
-    return (result.Items ?? []).map(this.toDomain);
+    do {
+      const result = await this.client.send(
+        new QueryCommand({
+          TableName: this.tableName,
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: {
+            ":pk": `USER#${userId}`,
+          },
+          ExclusiveStartKey: lastEvaluatedKey,
+        })
+      );
+
+      items.push(...(result.Items ?? []));
+      lastEvaluatedKey = result.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+
+    const normalizedProvider = normalizeProvider(provider);
+
+    return items
+      .map(item => this.toDomain(item))
+      .filter(transaction => !normalizedProvider || transaction.provider === normalizedProvider)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
   }
 
   async findAll(limit = 100): Promise<Transaction[]> {
@@ -86,12 +100,16 @@ export class DynamoTransactionRepository implements TransactionRepository {
       productId: transaction.productId,
       priceId: transaction.priceId,
       subscriptionId: transaction.subscriptionId,
+      provider: transaction.provider,
       createdAt: transaction.createdAt.toISOString(),
       metadata: transaction.metadata ? JSON.stringify(transaction.metadata) : undefined,
     };
   }
 
   private toDomain(item: Record<string, any>): Transaction {
+    const metadata = parseMetadata(item.metadata);
+    const provider = normalizeProvider(item.provider ?? metadata?.provider);
+
     return new Transaction(
       item.transactionId,
       item.userId,
@@ -103,7 +121,37 @@ export class DynamoTransactionRepository implements TransactionRepository {
       item.productId,
       item.priceId,
       item.subscriptionId,
-      item.metadata ? JSON.parse(item.metadata) : undefined
+      provider,
+      metadata
     );
   }
+}
+
+function parseMetadata(metadata: unknown): Record<string, any> | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+
+  if (typeof metadata === "string") {
+    return JSON.parse(metadata) as Record<string, any>;
+  }
+
+  if (typeof metadata === "object") {
+    return metadata as Record<string, any>;
+  }
+
+  return undefined;
+}
+
+function normalizeProvider(provider: unknown): TransactionProvider | undefined {
+  if (typeof provider !== "string") {
+    return undefined;
+  }
+
+  const normalized = provider.trim().toLowerCase();
+  if (normalized === "stripe" || normalized === "powertranz") {
+    return normalized;
+  }
+
+  return undefined;
 }

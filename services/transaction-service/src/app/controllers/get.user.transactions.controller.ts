@@ -25,8 +25,9 @@ export class GetUserTransactionsController {
     }
 
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+    const provider = req.query.provider?.trim().toLowerCase() || undefined;
 
-    const transactions = await this.useCase.execute({ userId, limit });
+    const transactions = await this.useCase.execute({ userId, limit, provider });
 
     return {
       userId,
@@ -39,6 +40,7 @@ export class GetUserTransactionsController {
         productId: t.productId,
         priceId: t.priceId,
         subscriptionId: t.subscriptionId,
+        provider: t.provider,
         createdAt: t.createdAt.toISOString(),
         metadata: t.metadata,
       })),

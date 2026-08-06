@@ -3,6 +3,7 @@ import { TransactionRepository, Transaction } from "@libs/domain";
 export interface GetUserTransactionsInput {
   userId: string;
   limit?: number;
+  provider?: string;
 }
 
 export class GetUserTransactionsUseCase {
@@ -11,6 +12,9 @@ export class GetUserTransactionsUseCase {
   ) {}
 
   async execute(input: GetUserTransactionsInput): Promise<Transaction[]> {
-    return await this.transactionRepo.findByUserId(input.userId, input.limit);
+    return await this.transactionRepo.findByUserId(input.userId, {
+      limit: input.limit,
+      provider: input.provider,
+    });
   }
 }
