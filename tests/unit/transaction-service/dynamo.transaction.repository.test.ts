@@ -82,11 +82,12 @@ describe("DynamoTransactionRepository.findByUserId", () => {
     });
 
     expect(mockSend).toHaveBeenCalledTimes(2);
-    expect(transactions.map(transaction => transaction.transactionId)).toEqual([
+    expect(transactions.items.map(transaction => transaction.transactionId)).toEqual([
       "txn_newest_powertranz",
       "txn_older_powertranz",
     ]);
-    expect(transactions.every(transaction => transaction.provider === "powertranz")).toBe(true);
+    expect(transactions.items.every(transaction => transaction.provider === "powertranz")).toBe(true);
+    expect(transactions.hasMore).toBe(false);
   });
 
   it("applies the limit after sorting by createdAt descending", async () => {
@@ -134,9 +135,74 @@ describe("DynamoTransactionRepository.findByUserId", () => {
       limit: 2,
     });
 
-    expect(transactions.map(transaction => transaction.transactionId)).toEqual([
+    expect(transactions.items.map(transaction => transaction.transactionId)).toEqual([
       "txn_newest",
       "txn_middle",
     ]);
+    expect(transactions.hasMore).toBe(true);
+    expect(typeof transactions.nextCursor).toBe("string");
+  });
+
+  it("uses the cursor to return the next page for the same query", async () => {
+    mockSend.mockResolvedValue({
+      Items: [
+        {
+          transactionId: "txn_oldest",
+          userId: "user_1",
+          type: "payment.successful",
+          status: "success",
+          amount: 100,
+          currency: "USD",
+          provider: "powertranz",
+          createdAt: "2026-08-01T10:00:00.000Z",
+          metadata: JSON.stringify({ provider: "powertranz" }),
+        },
+        {
+          transactionId: "txn_newest",
+          userId: "user_1",
+          type: "payment.successful",
+          status: "success",
+          amount: 200,
+          currency: "USD",
+          provider: "powertranz",
+          createdAt: "2026-08-04T10:00:00.000Z",
+          metadata: JSON.stringify({ provider: "powertranz" }),
+        },
+        {
+          transactionId: "txn_middle",
+          userId: "user_1",
+          type: "payment.successful",
+          status: "success",
+          amount: 150,
+          currency: "USD",
+          provider: "powertranz",
+          createdAt: "2026-08-02T10:00:00.000Z",
+          metadata: JSON.stringify({ provider: "powertranz" }),
+        },
+      ],
+    });
+
+    const repository = new DynamoTransactionRepository("transactions-test");
+
+    const firstPage = await repository.findByUserId("user_1", {
+      provider: "powertranz",
+      limit: 2,
+    });
+
+    const secondPage = await repository.findByUserId("user_1", {
+      provider: "powertranz",
+      limit: 2,
+      cursor: firstPage.nextCursor,
+    });
+
+    expect(firstPage.items.map(transaction => transaction.transactionId)).toEqual([
+      "txn_newest",
+      "txn_middle",
+    ]);
+    expect(secondPage.items.map(transaction => transaction.transactionId)).toEqual([
+      "txn_oldest",
+    ]);
+    expect(secondPage.hasMore).toBe(false);
+    expect(secondPage.nextCursor).toBeUndefined();
   });
 });
