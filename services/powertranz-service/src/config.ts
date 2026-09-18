@@ -19,8 +19,8 @@ const config: PowerTranzServiceConfig = {
     merchantPassword: process.env.POWERTRANZ_MERCHANT_PASSWORD || "",
     callbackSecret: process.env.POWERTRANZ_CALLBACK_SECRET || "",
     merchantResponseUrl: process.env.POWERTRANZ_MERCHANT_RESPONSE_URL || "",
-    hostedPagePageSet: process.env.POWERTRANZ_HPP_PAGE_SET || "",
-    hostedPagePageName: process.env.POWERTRANZ_HPP_PAGE_NAME || "",
+    hostedPagePageSet: process.env.POWERTRANZ_HPP_PAGE_SET || "Payment",
+    hostedPagePageName: process.env.POWERTRANZ_HPP_PAGE_NAME || "Eislett",
   },
 };
 

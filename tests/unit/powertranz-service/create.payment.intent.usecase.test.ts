@@ -93,7 +93,10 @@ describe("CreatePaymentIntentUseCase", () => {
         ThreeDSecure: false,
         ExtendedData: expect.objectContaining({
           MerchantResponseUrl: "https://example.test/powertranz/callback",
-          HostedPage: {},
+          HostedPage: {
+            PageSet: "PTZ/Payment",
+            PageName: "Eislett",
+          },
         }),
       }),
     );
