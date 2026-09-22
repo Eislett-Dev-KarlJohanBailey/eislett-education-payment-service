@@ -15,6 +15,8 @@ import { BadRequestError } from "../errors/bad-request.error";
 
 const POWERTRANZ_CURRENCY = "TTD";
 const POWERTRANZ_CURRENCY_CODE = "780";
+const POWERTRANZ_3DS_CHALLENGE_WINDOW_SIZE = 4;
+const POWERTRANZ_3DS_CHALLENGE_INDICATOR = "01";
 
 export interface CreatePowerTranzPaymentIntentInput {
   userId: string;
@@ -90,11 +92,15 @@ export class CreatePaymentIntentUseCase {
       TransactionIdentifier: transactionIdentifier,
       TotalAmount: price.amount,
       CurrencyCode: POWERTRANZ_CURRENCY_CODE,
-      ThreeDSecure: false,
+      ThreeDSecure: true,
       OrderIdentifier: orderIdentifier,
       AddressMatch: false,
       ExtendedData: {
         MerchantResponseUrl: this.merchantResponseUrl(),
+        ThreeDSecure: {
+          ChallengeWindowSize: POWERTRANZ_3DS_CHALLENGE_WINDOW_SIZE,
+          ChallengeIndicator: POWERTRANZ_3DS_CHALLENGE_INDICATOR,
+        },
         HostedPage: {
           ...(pageSet ? { PageSet: pageSet } : {}),
           ...(config.powertranz.hostedPagePageName
