@@ -24,17 +24,17 @@ variable "project_name" {
 variable "powertranz_base_url" {
   type        = string
   description = "PowerTranz API base URL for the selected environment"
-  default     = "https://staging.ptranz.com"
+  default     = "https://gateway.ptranz.com"
 }
 
 variable "powertranz_hpp_page_set" {
   type        = string
   description = "Optional PowerTranz hosted page PageSet"
-  default     = ""
+  default     = "Eislett"
 }
 
 variable "powertranz_hpp_page_name" {
   type        = string
   description = "Optional PowerTranz hosted page PageName"
-  default     = ""
+  default     = "Payment"
 }
