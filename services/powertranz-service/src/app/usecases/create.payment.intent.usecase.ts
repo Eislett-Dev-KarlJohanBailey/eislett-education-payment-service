@@ -14,6 +14,7 @@ import { randomUUID } from "crypto";
 import { BadRequestError } from "../errors/bad-request.error";
 
 const POWERTRANZ_CURRENCY = "TTD";
+const USD_CURRENCY = "USD";
 const POWERTRANZ_CURRENCY_CODE = "780";
 const POWERTRANZ_3DS_CHALLENGE_WINDOW_SIZE = 4;
 const POWERTRANZ_3DS_CHALLENGE_INDICATOR = "01";
@@ -69,6 +70,26 @@ export class CreatePaymentIntentUseCase {
     return pageSet.startsWith("PTZ/") ? pageSet : `PTZ/${pageSet}`;
   }
 
+  private powerTranzAmount(amount: number, currency: string): number {
+    const normalizedCurrency = currency.trim().toUpperCase();
+    if (normalizedCurrency === POWERTRANZ_CURRENCY) {
+      return amount;
+    }
+
+    if (normalizedCurrency !== USD_CURRENCY) {
+      throw new BadRequestError(
+        `Unsupported PowerTranz source currency: ${currency}`,
+      );
+    }
+
+    const exchangeRate = config.powertranz.usdTtdExchangeRate;
+    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+      throw new Error("USD_TTD_EXCHANGE_RATE must be a positive number");
+    }
+
+    return Math.round(amount * exchangeRate * 100) / 100;
+  }
+
   async execute(
     input: CreatePowerTranzPaymentIntentInput,
   ): Promise<CreatePowerTranzPaymentIntentOutput> {
@@ -87,10 +108,11 @@ export class CreatePaymentIntentUseCase {
     const transactionIdentifier = randomUUID();
     const orderIdentifier = transactionIdentifier;
     const pageSet = this.hostedPagePageSet();
+    const powerTranzAmount = this.powerTranzAmount(price.amount, price.currency);
 
     const sale = await this.powerTranzClient.createAuthSpiToken({
       TransactionIdentifier: transactionIdentifier,
-      TotalAmount: price.amount,
+      TotalAmount: powerTranzAmount,
       CurrencyCode: POWERTRANZ_CURRENCY_CODE,
       ThreeDSecure: true,
       OrderIdentifier: orderIdentifier,
@@ -117,7 +139,7 @@ export class CreatePaymentIntentUseCase {
       priceId: input.priceId,
       productId: price.productId,
       spiToken: sale.spiToken,
-      amount: price.amount,
+      amount: powerTranzAmount,
       currency: POWERTRANZ_CURRENCY,
       status: "pending_payment",
       expiresAt: expiresAt.toISOString(),
@@ -135,7 +157,7 @@ export class CreatePaymentIntentUseCase {
       transactionIdentifier: intent.transactionId,
       orderIdentifier: intent.orderIdentifier,
       expiresAt: expiresAt.toISOString(),
-      amount: price.amount,
+      amount: powerTranzAmount,
       currency: POWERTRANZ_CURRENCY,
       priceId: input.priceId,
       productId: price.productId,

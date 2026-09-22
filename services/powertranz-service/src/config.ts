@@ -6,6 +6,7 @@ export interface PowerTranzConfig {
   merchantResponseUrl: string;
   hostedPagePageSet: string;
   hostedPagePageName: string;
+  usdTtdExchangeRate: number;
 }
 
 export interface PowerTranzServiceConfig {
@@ -21,6 +22,7 @@ const config: PowerTranzServiceConfig = {
     merchantResponseUrl: process.env.POWERTRANZ_MERCHANT_RESPONSE_URL || "",
     hostedPagePageSet: process.env.POWERTRANZ_HPP_PAGE_SET || "Payment",
     hostedPagePageName: process.env.POWERTRANZ_HPP_PAGE_NAME || "Eislett",
+    usdTtdExchangeRate: Number(process.env.USD_TTD_EXCHANGE_RATE || "6.8"),
   },
 };
 

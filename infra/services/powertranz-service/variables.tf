@@ -38,3 +38,9 @@ variable "powertranz_hpp_page_name" {
   description = "Optional PowerTranz hosted page PageName"
   default     = "Payment"
 }
+
+variable "usd_ttd_exchange_rate" {
+  type        = number
+  description = "Exchange rate used to convert USD pricing to TTD for PowerTranz"
+  default     = 6.8
+}

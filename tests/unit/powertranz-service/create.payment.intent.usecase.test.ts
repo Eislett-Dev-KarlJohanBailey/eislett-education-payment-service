@@ -9,6 +9,7 @@ describe("CreatePaymentIntentUseCase", () => {
   beforeAll(async () => {
     process.env.POWERTRANZ_MERCHANT_RESPONSE_URL =
       "https://example.test/powertranz/callback";
+    process.env.USD_TTD_EXCHANGE_RATE = "6.8";
     delete process.env.POWERTRANZ_HPP_PAGE_SET;
     delete process.env.POWERTRANZ_HPP_PAGE_NAME;
 
@@ -88,7 +89,7 @@ describe("CreatePaymentIntentUseCase", () => {
 
     expect(powerTranzClient.createAuthSpiToken).toHaveBeenCalledWith(
       expect.objectContaining({
-        TotalAmount: 19.99,
+        TotalAmount: 135.93,
         CurrencyCode: "780",
         ThreeDSecure: true,
         ExtendedData: expect.objectContaining({
@@ -107,6 +108,7 @@ describe("CreatePaymentIntentUseCase", () => {
     expect(paymentIntentRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({
         spiToken: "spi_123",
+        amount: 135.93,
         currency: "TTD",
         transactionId: "txn_123",
         orderIdentifier: "txn_123",
@@ -118,6 +120,7 @@ describe("CreatePaymentIntentUseCase", () => {
         redirectData: "<form>redirect</form>",
         hostedPaymentPageHtml: "<form>redirect</form>",
         spiToken: "spi_123",
+        amount: 135.93,
         currency: "TTD",
       }),
     );
@@ -175,6 +178,40 @@ describe("CreatePaymentIntentUseCase", () => {
   it("forces PowerTranz requests to use TTD even when the source price currency differs", async () => {
     const { useCase } = buildUseCase();
     const result = await useCase.execute({ userId: "user_1", priceId: "price_1" });
+    expect(result.amount).toBe(135.93);
+    expect(result.currency).toBe("TTD");
+  });
+
+  it("leaves TTD amounts unchanged", async () => {
+    const ttdPrice = {
+      ...price,
+      amount: 6.8,
+      currency: "TTD",
+    };
+    const powerTranzClient = {
+      createAuthSpiToken: jest.fn().mockResolvedValue({
+        spiToken: "spi_123",
+      }),
+    };
+
+    const useCase = new CreatePaymentIntentUseCase(
+      { execute: jest.fn().mockResolvedValue(ttdPrice) } as any,
+      { execute: jest.fn().mockResolvedValue(product) } as any,
+      powerTranzClient as any,
+      { save: jest.fn().mockResolvedValue(undefined) } as any,
+    );
+
+    const result = await useCase.execute({
+      userId: "user_1",
+      priceId: "price_1",
+    });
+
+    expect(powerTranzClient.createAuthSpiToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        TotalAmount: 6.8,
+      }),
+    );
+    expect(result.amount).toBe(6.8);
     expect(result.currency).toBe("TTD");
   });
 });

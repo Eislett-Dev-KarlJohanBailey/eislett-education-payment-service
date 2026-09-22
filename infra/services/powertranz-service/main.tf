@@ -269,6 +269,7 @@ module "powertranz_service_lambda" {
     POWERTRANZ_MERCHANT_RESPONSE_URL = local.powertranz_merchant_response_url
     POWERTRANZ_HPP_PAGE_SET          = var.powertranz_hpp_page_set
     POWERTRANZ_HPP_PAGE_NAME         = var.powertranz_hpp_page_name
+    USD_TTD_EXCHANGE_RATE            = tostring(var.usd_ttd_exchange_rate)
     POWERTRANZ_INTENTS_TABLE_NAME    = aws_dynamodb_table.powertranz_intents.name
     PRODUCTS_TABLE                   = data.terraform_remote_state.product_service.outputs.products_table_name
     PRICES_TABLE                     = data.terraform_remote_state.pricing_service.outputs.prices_table_name
