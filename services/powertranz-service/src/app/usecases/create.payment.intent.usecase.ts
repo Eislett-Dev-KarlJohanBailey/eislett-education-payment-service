@@ -109,20 +109,25 @@ export class CreatePaymentIntentUseCase {
     const orderIdentifier = transactionIdentifier;
     const pageSet = this.hostedPagePageSet();
     const powerTranzAmount = this.powerTranzAmount(price.amount, price.currency);
+    const threeDsEnabled = config.powertranz.threeDsEnabled;
 
     const sale = await this.powerTranzClient.createAuthSpiToken({
       TransactionIdentifier: transactionIdentifier,
       TotalAmount: powerTranzAmount,
       CurrencyCode: POWERTRANZ_CURRENCY_CODE,
-      ThreeDSecure: true,
+      ThreeDSecure: threeDsEnabled,
       OrderIdentifier: orderIdentifier,
       AddressMatch: false,
       ExtendedData: {
         MerchantResponseUrl: this.merchantResponseUrl(),
-        ThreeDSecure: {
-          ChallengeWindowSize: POWERTRANZ_3DS_CHALLENGE_WINDOW_SIZE,
-          ChallengeIndicator: POWERTRANZ_3DS_CHALLENGE_INDICATOR,
-        },
+        ...(threeDsEnabled
+          ? {
+              ThreeDSecure: {
+                ChallengeWindowSize: POWERTRANZ_3DS_CHALLENGE_WINDOW_SIZE,
+                ChallengeIndicator: POWERTRANZ_3DS_CHALLENGE_INDICATOR,
+              },
+            }
+          : {}),
         HostedPage: {
           ...(pageSet ? { PageSet: pageSet } : {}),
           ...(config.powertranz.hostedPagePageName

@@ -45,6 +45,12 @@ variable "powertranz_billing_redirect_base_url" {
   default     = "https://development.is-ed.com"
 }
 
+variable "powertranz_3ds_enabled" {
+  type        = bool
+  description = "Whether PowerTranz requests should explicitly enable 3DS"
+  default     = true
+}
+
 variable "usd_ttd_exchange_rate" {
   type        = number
   description = "Exchange rate used to convert USD pricing to TTD for PowerTranz"

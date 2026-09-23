@@ -5,6 +5,7 @@ export interface PowerTranzConfig {
   callbackSecret: string;
   merchantResponseUrl: string;
   billingRedirectBaseUrl: string;
+  threeDsEnabled: boolean;
   hostedPagePageSet: string;
   hostedPagePageName: string;
   usdTtdExchangeRate: number;
@@ -12,6 +13,14 @@ export interface PowerTranzConfig {
 
 export interface PowerTranzServiceConfig {
   powertranz: PowerTranzConfig;
+}
+
+function envFlag(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined || value.trim() === "") {
+    return fallback;
+  }
+
+  return value.trim().toLowerCase() === "true";
 }
 
 const config: PowerTranzServiceConfig = {
@@ -24,6 +33,7 @@ const config: PowerTranzServiceConfig = {
     billingRedirectBaseUrl:
       process.env.POWERTRANZ_BILLING_REDIRECT_BASE_URL ||
       "https://development.is-ed.com",
+    threeDsEnabled: envFlag(process.env.POWERTRANZ_3DS_ENABLED, true),
     hostedPagePageSet: process.env.POWERTRANZ_HPP_PAGE_SET || "Payment",
     hostedPagePageName: process.env.POWERTRANZ_HPP_PAGE_NAME || "Eislett",
     usdTtdExchangeRate: Number(process.env.USD_TTD_EXCHANGE_RATE || "6.8"),

@@ -10,6 +10,7 @@ describe("CreatePaymentIntentUseCase", () => {
     process.env.POWERTRANZ_MERCHANT_RESPONSE_URL =
       "https://example.test/powertranz/callback";
     process.env.USD_TTD_EXCHANGE_RATE = "6.8";
+    process.env.POWERTRANZ_3DS_ENABLED = "true";
     delete process.env.POWERTRANZ_HPP_PAGE_SET;
     delete process.env.POWERTRANZ_HPP_PAGE_NAME;
 
@@ -168,6 +169,59 @@ describe("CreatePaymentIntentUseCase", () => {
 
     delete process.env.POWERTRANZ_HPP_PAGE_SET;
     delete process.env.POWERTRANZ_HPP_PAGE_NAME;
+    process.env.POWERTRANZ_3DS_ENABLED = "true";
+    jest.resetModules();
+    const resetMod = await import(
+      "../../../services/powertranz-service/src/app/usecases/create.payment.intent.usecase"
+    );
+    CreatePaymentIntentUseCase = resetMod.CreatePaymentIntentUseCase;
+  });
+
+  it("omits 3DS settings when 3DS is disabled", async () => {
+    process.env.POWERTRANZ_3DS_ENABLED = "false";
+
+    jest.resetModules();
+    const mod = await import(
+      "../../../services/powertranz-service/src/app/usecases/create.payment.intent.usecase"
+    );
+    const NonThreeDsCreatePaymentIntentUseCase = mod.CreatePaymentIntentUseCase;
+
+    const powerTranzClient = {
+      createAuthSpiToken: jest.fn().mockResolvedValue({
+        spiToken: "spi_123",
+      }),
+    };
+
+    const useCase = new NonThreeDsCreatePaymentIntentUseCase(
+      { execute: jest.fn().mockResolvedValue(price) } as any,
+      { execute: jest.fn().mockResolvedValue(product) } as any,
+      powerTranzClient as any,
+      { save: jest.fn().mockResolvedValue(undefined) } as any,
+    );
+
+    await useCase.execute({
+      userId: "user_1",
+      priceId: "price_1",
+    });
+
+    expect(powerTranzClient.createAuthSpiToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ThreeDSecure: false,
+        ExtendedData: expect.objectContaining({
+          MerchantResponseUrl: "https://example.test/powertranz/callback",
+          HostedPage: {
+            PageSet: "PTZ/Payment",
+            PageName: "Eislett",
+          },
+        }),
+      }),
+    );
+
+    expect(
+      powerTranzClient.createAuthSpiToken.mock.calls[0][0].ExtendedData.ThreeDSecure,
+    ).toBeUndefined();
+
+    process.env.POWERTRANZ_3DS_ENABLED = "true";
     jest.resetModules();
     const resetMod = await import(
       "../../../services/powertranz-service/src/app/usecases/create.payment.intent.usecase"
