@@ -39,6 +39,12 @@ variable "powertranz_hpp_page_name" {
   default     = "Payment"
 }
 
+variable "powertranz_billing_redirect_base_url" {
+  type        = string
+  description = "Frontend base URL used after PowerTranz success or cancel redirects"
+  default     = "https://development.is-ed.com"
+}
+
 variable "usd_ttd_exchange_rate" {
   type        = number
   description = "Exchange rate used to convert USD pricing to TTD for PowerTranz"

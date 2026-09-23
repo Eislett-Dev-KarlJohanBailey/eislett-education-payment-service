@@ -4,6 +4,7 @@ export interface PowerTranzConfig {
   merchantPassword: string;
   callbackSecret: string;
   merchantResponseUrl: string;
+  billingRedirectBaseUrl: string;
   hostedPagePageSet: string;
   hostedPagePageName: string;
   usdTtdExchangeRate: number;
@@ -20,6 +21,9 @@ const config: PowerTranzServiceConfig = {
     merchantPassword: process.env.POWERTRANZ_MERCHANT_PASSWORD || "",
     callbackSecret: process.env.POWERTRANZ_CALLBACK_SECRET || "",
     merchantResponseUrl: process.env.POWERTRANZ_MERCHANT_RESPONSE_URL || "",
+    billingRedirectBaseUrl:
+      process.env.POWERTRANZ_BILLING_REDIRECT_BASE_URL ||
+      "https://development.is-ed.com",
     hostedPagePageSet: process.env.POWERTRANZ_HPP_PAGE_SET || "Payment",
     hostedPagePageName: process.env.POWERTRANZ_HPP_PAGE_NAME || "Eislett",
     usdTtdExchangeRate: Number(process.env.USD_TTD_EXCHANGE_RATE || "6.8"),

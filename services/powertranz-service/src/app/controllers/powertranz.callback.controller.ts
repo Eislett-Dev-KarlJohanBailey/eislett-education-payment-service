@@ -15,7 +15,10 @@ export class PowerTranzCallbackController {
       orderIdentifier?: string;
     },
   ) {
-    const url = new URL("/billing", "https://payments.is-ed.local");
+    const url = new URL(
+      "/billing",
+      config.powertranz.billingRedirectBaseUrl,
+    );
     url.searchParams.set("payment", payment);
 
     if (details?.spiToken) {
@@ -30,7 +33,7 @@ export class PowerTranzCallbackController {
       url.searchParams.set("orderIdentifier", details.orderIdentifier);
     }
 
-    return redirect(`${url.pathname}${url.search}`);
+    return redirect(url.toString());
   }
 
   private callbackPayload(body: Record<string, unknown>): Record<string, unknown> {

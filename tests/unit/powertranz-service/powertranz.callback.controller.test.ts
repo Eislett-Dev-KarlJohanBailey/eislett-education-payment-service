@@ -46,7 +46,8 @@ describe("PowerTranzCallbackController", () => {
       expect.objectContaining({
         statusCode: 303,
         headers: expect.objectContaining({
-          Location: "/billing?payment=success&spiToken=spi_123",
+          Location:
+            "https://development.is-ed.com/billing?payment=success&spiToken=spi_123",
         }),
         body: "",
       }),
@@ -87,7 +88,8 @@ describe("PowerTranzCallbackController", () => {
       expect.objectContaining({
         statusCode: 303,
         headers: expect.objectContaining({
-          Location: "/billing?payment=success&spiToken=spi_query_123",
+          Location:
+            "https://development.is-ed.com/billing?payment=success&spiToken=spi_query_123",
         }),
         body: "",
       }),
@@ -120,7 +122,7 @@ describe("PowerTranzCallbackController", () => {
       expect.objectContaining({
         statusCode: 303,
         headers: expect.objectContaining({
-          Location: "/billing?payment=cancel",
+          Location: "https://development.is-ed.com/billing?payment=cancel",
         }),
         body: "",
       }),
@@ -148,7 +150,8 @@ describe("PowerTranzCallbackController", () => {
       expect.objectContaining({
         statusCode: 303,
         headers: expect.objectContaining({
-          Location: "/billing?payment=cancel&spiToken=spi_123",
+          Location:
+            "https://development.is-ed.com/billing?payment=cancel&spiToken=spi_123",
         }),
         body: "",
       }),
