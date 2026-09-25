@@ -413,10 +413,23 @@ export class HandlePowerTranzCallbackUseCase {
       },
     };
 
-    const transaction = Transaction.fromBillingEvent(
-      billingEvent.type,
-      billingEvent.payload,
-      billingEvent.meta.eventId,
+    const transaction = new Transaction(
+      intent.id,
+      intent.userId,
+      "payment.successful",
+      "success",
+      intent.amount,
+      intent.currency,
+      new Date(intent.createdAt),
+      intent.productId,
+      intent.priceId,
+      undefined,
+      "powertranz",
+      {
+        eventId: billingEvent.meta.eventId,
+        provider: "powertranz",
+        billingType: "one_time",
+      },
     );
 
     await this.transactionRepo.save(transaction);

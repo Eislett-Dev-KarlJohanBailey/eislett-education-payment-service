@@ -18,11 +18,13 @@ const USD_CURRENCY = "USD";
 const POWERTRANZ_CURRENCY_CODE = "780";
 const POWERTRANZ_3DS_CHALLENGE_WINDOW_SIZE = 4;
 const POWERTRANZ_3DS_CHALLENGE_INDICATOR = "01";
+export type PowerTranzCardType = "debit" | "credit";
 
 export interface CreatePowerTranzPaymentIntentInput {
   userId: string;
   userEmail?: string;
   priceId: string;
+  cardType?: PowerTranzCardType;
 }
 
 export interface CreatePowerTranzPaymentIntentOutput {
@@ -90,6 +92,16 @@ export class CreatePaymentIntentUseCase {
     return Math.round(amount * exchangeRate * 100) / 100;
   }
 
+  private shouldUseThreeDs(cardType?: PowerTranzCardType): boolean {
+    const effectiveCardType: PowerTranzCardType = cardType ?? "credit";
+
+    if (effectiveCardType === "debit") {
+      return false;
+    }
+
+    return config.powertranz.threeDsEnabled;
+  }
+
   async execute(
     input: CreatePowerTranzPaymentIntentInput,
   ): Promise<CreatePowerTranzPaymentIntentOutput> {
@@ -109,7 +121,7 @@ export class CreatePaymentIntentUseCase {
     const orderIdentifier = transactionIdentifier;
     const pageSet = this.hostedPagePageSet();
     const powerTranzAmount = this.powerTranzAmount(price.amount, price.currency);
-    const threeDsEnabled = config.powertranz.threeDsEnabled;
+    const threeDsEnabled = this.shouldUseThreeDs(input.cardType);
 
     const sale = await this.powerTranzClient.createAuthSpiToken({
       TransactionIdentifier: transactionIdentifier,

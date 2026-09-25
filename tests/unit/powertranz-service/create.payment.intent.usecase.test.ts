@@ -229,6 +229,66 @@ describe("CreatePaymentIntentUseCase", () => {
     CreatePaymentIntentUseCase = resetMod.CreatePaymentIntentUseCase;
   });
 
+  it("disables 3DS for debit even when 3DS is globally enabled", async () => {
+    process.env.POWERTRANZ_3DS_ENABLED = "true";
+    jest.resetModules();
+
+    const mod = await import(
+      "../../../services/powertranz-service/src/app/usecases/create.payment.intent.usecase"
+    );
+    const DebitCreatePaymentIntentUseCase = mod.CreatePaymentIntentUseCase;
+
+    const powerTranzClient = {
+      createAuthSpiToken: jest.fn().mockResolvedValue({
+        spiToken: "spi_123",
+      }),
+    };
+
+    const useCase = new DebitCreatePaymentIntentUseCase(
+      { execute: jest.fn().mockResolvedValue(price) } as any,
+      { execute: jest.fn().mockResolvedValue(product) } as any,
+      powerTranzClient as any,
+      { save: jest.fn().mockResolvedValue(undefined) } as any,
+    );
+
+    await useCase.execute({
+      userId: "user_1",
+      priceId: "price_1",
+      cardType: "debit",
+    });
+
+    expect(powerTranzClient.createAuthSpiToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ThreeDSecure: false,
+      }),
+    );
+    expect(
+      powerTranzClient.createAuthSpiToken.mock.calls[0][0].ExtendedData.ThreeDSecure,
+    ).toBeUndefined();
+  });
+
+  it("uses 3DS for credit when 3DS is globally enabled", async () => {
+    const { useCase, powerTranzClient } = buildUseCase();
+
+    await useCase.execute({
+      userId: "user_1",
+      priceId: "price_1",
+      cardType: "credit",
+    });
+
+    expect(powerTranzClient.createAuthSpiToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ThreeDSecure: true,
+        ExtendedData: expect.objectContaining({
+          ThreeDSecure: {
+            ChallengeWindowSize: 4,
+            ChallengeIndicator: "01",
+          },
+        }),
+      }),
+    );
+  });
+
   it("forces PowerTranz requests to use TTD even when the source price currency differs", async () => {
     const { useCase } = buildUseCase();
     const result = await useCase.execute({ userId: "user_1", priceId: "price_1" });

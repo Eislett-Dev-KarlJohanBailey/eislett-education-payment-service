@@ -105,6 +105,12 @@ describe("HandlePowerTranzCallbackUseCase", () => {
       }),
     );
     expect(transactionRepo.save).toHaveBeenCalledTimes(1);
+    expect(transactionRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transactionId: "intent_1",
+        createdAt: new Date(baseIntent.createdAt),
+      }),
+    );
     expect(billingEventPublisher.publish).toHaveBeenCalledTimes(1);
     expect(emailQueue.send).toHaveBeenCalledWith(
       expect.objectContaining({
