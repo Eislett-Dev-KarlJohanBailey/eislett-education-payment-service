@@ -269,6 +269,7 @@ module "powertranz_service_lambda" {
     POWERTRANZ_MERCHANT_RESPONSE_URL = local.powertranz_merchant_response_url
     POWERTRANZ_BILLING_REDIRECT_BASE_URL = var.powertranz_billing_redirect_base_url
     POWERTRANZ_3DS_ENABLED           = tostring(var.powertranz_3ds_enabled)
+    POWERTRANZ_ALLOW_NON_3DS_FALLBACK = tostring(var.powertranz_allow_non_3ds_fallback)
     POWERTRANZ_HPP_PAGE_SET          = var.powertranz_hpp_page_set
     POWERTRANZ_HPP_PAGE_NAME         = var.powertranz_hpp_page_name
     USD_TTD_EXCHANGE_RATE            = tostring(var.usd_ttd_exchange_rate)

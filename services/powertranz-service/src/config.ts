@@ -6,6 +6,7 @@ export interface PowerTranzConfig {
   merchantResponseUrl: string;
   billingRedirectBaseUrl: string;
   threeDsEnabled: boolean;
+  allowNonThreeDsFallback: boolean;
   hostedPagePageSet: string;
   hostedPagePageName: string;
   usdTtdExchangeRate: number;
@@ -34,6 +35,10 @@ const config: PowerTranzServiceConfig = {
       process.env.POWERTRANZ_BILLING_REDIRECT_BASE_URL ||
       "https://development.is-ed.com",
     threeDsEnabled: envFlag(process.env.POWERTRANZ_3DS_ENABLED, true),
+    allowNonThreeDsFallback: envFlag(
+      process.env.POWERTRANZ_ALLOW_NON_3DS_FALLBACK,
+      true,
+    ),
     hostedPagePageSet: process.env.POWERTRANZ_HPP_PAGE_SET || "Payment",
     hostedPagePageName: process.env.POWERTRANZ_HPP_PAGE_NAME || "Eislett",
     usdTtdExchangeRate: Number(process.env.USD_TTD_EXCHANGE_RATE || "6.8"),

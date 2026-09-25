@@ -51,6 +51,12 @@ variable "powertranz_3ds_enabled" {
   default     = true
 }
 
+variable "powertranz_allow_non_3ds_fallback" {
+  type        = bool
+  description = "Whether PowerTranz callbacks with 3DS not supported should continue to payment"
+  default     = true
+}
+
 variable "usd_ttd_exchange_rate" {
   type        = number
   description = "Exchange rate used to convert USD pricing to TTD for PowerTranz"

@@ -1,4 +1,5 @@
 import { BillingEvent, Transaction, TransactionRepository } from "@libs/domain";
+import config from "../../config";
 import { PowerTranzIntentRepository } from "../../infrastructure/powertranz.intent.repository";
 import { PowerTranzClient } from "../../infrastructure/powertranz.client";
 import {
@@ -130,8 +131,11 @@ export class HandlePowerTranzCallbackUseCase {
     const hasThreeDsSignal = authStatus.length > 0 || authIso.length > 0;
     const hostedPagePreprocessingComplete = authIso === "HP0";
     const threeDsApproved = authStatus === "Y" && authIso === "3D0";
+    const threeDsUnsupported = authIso === "3D1";
     const canProceedToPayment =
-      hostedPagePreprocessingComplete || threeDsApproved;
+      hostedPagePreprocessingComplete ||
+      threeDsApproved ||
+      (threeDsUnsupported && config.powertranz.allowNonThreeDsFallback);
     const callbackAt = new Date().toISOString();
 
     console.info("[HandlePowerTranzCallbackUseCase] callback auth state", {
@@ -141,6 +145,7 @@ export class HandlePowerTranzCallbackUseCase {
       hasThreeDsSignal,
       hostedPagePreprocessingComplete,
       threeDsApproved,
+      threeDsUnsupported,
       canProceedToPayment,
     });
 
