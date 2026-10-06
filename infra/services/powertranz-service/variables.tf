@@ -24,17 +24,41 @@ variable "project_name" {
 variable "powertranz_base_url" {
   type        = string
   description = "PowerTranz API base URL for the selected environment"
-  default     = "https://staging.ptranz.com"
+  default     = "https://gateway.ptranz.com"
 }
 
 variable "powertranz_hpp_page_set" {
   type        = string
   description = "Optional PowerTranz hosted page PageSet"
-  default     = ""
+  default     = "Eislett"
 }
 
 variable "powertranz_hpp_page_name" {
   type        = string
   description = "Optional PowerTranz hosted page PageName"
-  default     = ""
+  default     = "Payment"
+}
+
+variable "powertranz_billing_redirect_base_url" {
+  type        = string
+  description = "Frontend base URL used after PowerTranz success or cancel redirects"
+  default     = "https://development.is-ed.com"
+}
+
+variable "powertranz_3ds_enabled" {
+  type        = bool
+  description = "Whether PowerTranz requests should explicitly enable 3DS"
+  default     = true
+}
+
+variable "powertranz_allow_non_3ds_fallback" {
+  type        = bool
+  description = "Whether PowerTranz callbacks with 3DS not supported should continue to payment"
+  default     = true
+}
+
+variable "usd_ttd_exchange_rate" {
+  type        = number
+  description = "Exchange rate used to convert USD pricing to TTD for PowerTranz"
+  default     = 6.8
 }

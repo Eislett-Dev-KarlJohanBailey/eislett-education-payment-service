@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent } from "aws-lambda";
 import { parseRequest } from "./parse-request";
 import { routes } from "./routes";
-import { corsHeaders, errorResponse, response } from "./response";
+import { corsHeaders, errorResponse, isProxyResult, response } from "./response";
 import { RequestContext } from "./types";
 import { requireUser } from "@libs/domain";
 
@@ -76,7 +76,9 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
     const normalizedPath = normalizePath(actualPath);
     const pathWithoutQuery = normalizedPath.split("?")[0];
 
-    const needsUser = pathWithoutQuery === "/powertranz/payment-intents";
+    const needsUser =
+      pathWithoutQuery === "/powertranz/payment-intents" ||
+      pathWithoutQuery === "/powertranz/invoices";
 
     const requestWithContext = {
       ...req,
@@ -96,6 +98,10 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
     }
 
     const result = await handler(requestWithContext);
+    if (isProxyResult(result)) {
+      return result;
+    }
+
     return response(200, result);
   } catch (err) {
     return errorResponse(err);

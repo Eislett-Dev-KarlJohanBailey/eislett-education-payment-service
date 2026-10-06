@@ -138,7 +138,20 @@ locals {
     data.aws_secretsmanager_secret_version.jwt_access_token_secret.secret_string
   )
 
-  powertranz_merchant_response_url = "https://${data.terraform_remote_state.foundation.outputs.api_gateway_id}.execute-api.${data.aws_region.current.name}.amazonaws.com/powertranz/callback"
+  api_stage_name = lookup({
+    dev         = "dev"
+    development = "dev"
+    staging     = "staging"
+    prod        = "prod"
+    production  = "prod"
+    main        = "prod"
+  }, lower(var.environment), var.environment)
+
+  api_custom_domain_url = try(trimsuffix(data.terraform_remote_state.foundation.outputs.api_custom_domain_url, "/"), "")
+  api_execute_url       = "https://${data.terraform_remote_state.foundation.outputs.api_gateway_id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${local.api_stage_name}"
+  api_base_url          = local.api_custom_domain_url != "" ? "${local.api_custom_domain_url}/v1" : local.api_execute_url
+
+  powertranz_merchant_response_url = "${local.api_base_url}/powertranz/callback"
 }
 
 resource "aws_dynamodb_table" "powertranz_intents" {
@@ -254,8 +267,12 @@ module "powertranz_service_lambda" {
     POWERTRANZ_MERCHANT_PASSWORD     = local.powertranz_merchant_password
     POWERTRANZ_CALLBACK_SECRET       = local.powertranz_callback_secret
     POWERTRANZ_MERCHANT_RESPONSE_URL = local.powertranz_merchant_response_url
+    POWERTRANZ_BILLING_REDIRECT_BASE_URL = var.powertranz_billing_redirect_base_url
+    POWERTRANZ_3DS_ENABLED           = tostring(var.powertranz_3ds_enabled)
+    POWERTRANZ_ALLOW_NON_3DS_FALLBACK = tostring(var.powertranz_allow_non_3ds_fallback)
     POWERTRANZ_HPP_PAGE_SET          = var.powertranz_hpp_page_set
     POWERTRANZ_HPP_PAGE_NAME         = var.powertranz_hpp_page_name
+    USD_TTD_EXCHANGE_RATE            = tostring(var.usd_ttd_exchange_rate)
     POWERTRANZ_INTENTS_TABLE_NAME    = aws_dynamodb_table.powertranz_intents.name
     PRODUCTS_TABLE                   = data.terraform_remote_state.product_service.outputs.products_table_name
     PRICES_TABLE                     = data.terraform_remote_state.pricing_service.outputs.prices_table_name

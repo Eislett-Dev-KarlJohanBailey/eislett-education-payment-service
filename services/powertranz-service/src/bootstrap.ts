@@ -5,6 +5,8 @@ import { PowerTranzClient } from "./infrastructure/powertranz.client";
 import { DynamoPowerTranzIntentRepository } from "./infrastructure/dynamo.powertranz-intent.repository";
 import { PowerTranzCallbackController } from "./app/controllers/powertranz.callback.controller";
 import { HandlePowerTranzCallbackUseCase } from "./app/usecases/handle.powertranz.callback.usecase";
+import { GetPowerTranzInvoicesController } from "./app/controllers/get.powertranz.invoices.controller";
+import { GetPowerTranzInvoicesUseCase } from "./app/usecases/get.powertranz.invoices.usecase";
 import { SqsEmailQueuePublisher } from "./infrastructure/email.queue.publisher";
 import { BillingEventPublisher } from "./infrastructure/billing-event.publisher";
 import {
@@ -50,6 +52,12 @@ export function bootstrap() {
   const createPaymentIntentController = new CreatePaymentIntentController(
     createPaymentIntentUseCase,
   );
+  const getPowerTranzInvoicesUseCase = new GetPowerTranzInvoicesUseCase(
+    paymentIntentRepo,
+  );
+  const getPowerTranzInvoicesController = new GetPowerTranzInvoicesController(
+    getPowerTranzInvoicesUseCase,
+  );
   const powerTranzCallbackController = new PowerTranzCallbackController(
     handlePowerTranzCallbackUseCase,
   );
@@ -57,6 +65,7 @@ export function bootstrap() {
   return {
     healthController,
     createPaymentIntentController,
+    getPowerTranzInvoicesController,
     powerTranzCallbackController,
   };
 }

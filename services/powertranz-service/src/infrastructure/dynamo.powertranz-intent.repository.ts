@@ -3,6 +3,7 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
+  ScanCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 
@@ -45,6 +46,29 @@ export class DynamoPowerTranzIntentRepository implements PowerTranzIntentReposit
       }),
     );
     return (res.Item as PowerTranzPaymentIntent) || null;
+  }
+
+  async findByUserId(
+    userId: string,
+    limit?: number,
+  ): Promise<PowerTranzPaymentIntent[]> {
+    const result = await this.client.send(
+      new ScanCommand({
+        TableName: this.tableName,
+        FilterExpression: "userId = :userId",
+        ExpressionAttributeValues: {
+          ":userId": userId,
+        },
+      }),
+    );
+
+    const items = ((result.Items as PowerTranzPaymentIntent[] | undefined) ?? [])
+      .sort(
+        (left, right) =>
+          new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+      );
+
+    return typeof limit === "number" ? items.slice(0, limit) : items;
   }
 
   async updateBySpiToken(

@@ -11,6 +11,12 @@ const SEED_PRODUCT = {
   isActive: true,
 };
 
+export interface ProductTargetingInput {
+  countries?: string[];
+  percentage?: number;
+  cidrBlocks?: string[];
+}
+
 /**
  * Seeds a single product into the products table for PUT and DELETE role-based e2e tests.
  * Uses SEED_PRODUCT_ID so tests can target the same product by id.
@@ -48,7 +54,7 @@ export async function seedProductForEditDelete(): Promise<{
     new PutCommand({
       TableName: TABLE_NAMES.products,
       Item: item,
-    })
+    }),
   );
 
   return {
@@ -67,6 +73,7 @@ export interface SeedProductInput {
   entitlements: string[];
   usageLimits?: Array<{ metric: string; limit: number; period: string }>;
   isActive?: boolean;
+  targeting?: ProductTargetingInput;
 }
 
 /**
@@ -90,6 +97,7 @@ export async function seedProduct(input: SeedProductInput): Promise<void> {
     addons: [],
     addonConfigs: [],
     providers: {},
+    targeting: input.targeting ?? undefined,
     isActive: input.isActive !== false,
     createdAt: now,
     updatedAt: now,
@@ -99,7 +107,7 @@ export async function seedProduct(input: SeedProductInput): Promise<void> {
     new PutCommand({
       TableName: TABLE_NAMES.products,
       Item: item,
-    })
+    }),
   );
 }
 
@@ -144,21 +152,111 @@ export async function seedProductsForByEntitlementTests(): Promise<void> {
  */
 export async function seedProductsForListAndPaginationTests(): Promise<void> {
   const base = [
-    { productId: "list-sub-1", name: "Sub Active 1", type: "subscription" as const, isActive: true, entitlements: ["subject_access"] },
-    { productId: "list-sub-2", name: "Sub Active 2", type: "subscription" as const, isActive: true, entitlements: ["token"] },
-    { productId: "list-sub-3", name: "Sub Active 3", type: "subscription" as const, isActive: true, entitlements: ["subject_access", "token"] },
-    { productId: "list-sub-4", name: "Sub Active 4", type: "subscription" as const, isActive: true, entitlements: ["subject_access"] },
-    { productId: "list-sub-5", name: "Sub Active 5", type: "subscription" as const, isActive: true, entitlements: ["token"] },
-    { productId: "list-sub-6", name: "Sub Inactive", type: "subscription" as const, isActive: false, entitlements: ["subject_access"] },
-    { productId: "list-one-1", name: "One-off Active 1", type: "one_off" as const, isActive: true, entitlements: ["subject_access"] },
-    { productId: "list-one-2", name: "One-off Active 2", type: "one_off" as const, isActive: true, entitlements: ["token"] },
-    { productId: "list-one-3", name: "One-off Inactive", type: "one_off" as const, isActive: false, entitlements: ["subject_access", "token"] },
-    { productId: "list-addon-1", name: "Addon Active", type: "addon" as const, isActive: true, entitlements: ["subject_access"] },
-    { productId: "list-addon-2", name: "Addon Inactive", type: "addon" as const, isActive: false, entitlements: ["token"] },
-    { productId: "list-sub-7", name: "Sub Extra 1", type: "subscription" as const, isActive: true, entitlements: ["subject_access"] },
-    { productId: "list-sub-8", name: "Sub Extra 2", type: "subscription" as const, isActive: true, entitlements: ["token"] },
-    { productId: "list-sub-9", name: "Sub Extra 3", type: "subscription" as const, isActive: true, entitlements: ["subject_access", "token"] },
-    { productId: "list-sub-10", name: "Sub Inactive 2", type: "subscription" as const, isActive: false, entitlements: ["token"] },
+    {
+      productId: "list-sub-1",
+      name: "Sub Active 1",
+      type: "subscription" as const,
+      isActive: true,
+      entitlements: ["subject_access"],
+    },
+    {
+      productId: "list-sub-2",
+      name: "Sub Active 2",
+      type: "subscription" as const,
+      isActive: true,
+      entitlements: ["token"],
+    },
+    {
+      productId: "list-sub-3",
+      name: "Sub Active 3",
+      type: "subscription" as const,
+      isActive: true,
+      entitlements: ["subject_access", "token"],
+    },
+    {
+      productId: "list-sub-4",
+      name: "Sub Active 4",
+      type: "subscription" as const,
+      isActive: true,
+      entitlements: ["subject_access"],
+    },
+    {
+      productId: "list-sub-5",
+      name: "Sub Active 5",
+      type: "subscription" as const,
+      isActive: true,
+      entitlements: ["token"],
+    },
+    {
+      productId: "list-sub-6",
+      name: "Sub Inactive",
+      type: "subscription" as const,
+      isActive: false,
+      entitlements: ["subject_access"],
+    },
+    {
+      productId: "list-one-1",
+      name: "One-off Active 1",
+      type: "one_off" as const,
+      isActive: true,
+      entitlements: ["subject_access"],
+    },
+    {
+      productId: "list-one-2",
+      name: "One-off Active 2",
+      type: "one_off" as const,
+      isActive: true,
+      entitlements: ["token"],
+    },
+    {
+      productId: "list-one-3",
+      name: "One-off Inactive",
+      type: "one_off" as const,
+      isActive: false,
+      entitlements: ["subject_access", "token"],
+    },
+    {
+      productId: "list-addon-1",
+      name: "Addon Active",
+      type: "addon" as const,
+      isActive: true,
+      entitlements: ["subject_access"],
+    },
+    {
+      productId: "list-addon-2",
+      name: "Addon Inactive",
+      type: "addon" as const,
+      isActive: false,
+      entitlements: ["token"],
+    },
+    {
+      productId: "list-sub-7",
+      name: "Sub Extra 1",
+      type: "subscription" as const,
+      isActive: true,
+      entitlements: ["subject_access"],
+    },
+    {
+      productId: "list-sub-8",
+      name: "Sub Extra 2",
+      type: "subscription" as const,
+      isActive: true,
+      entitlements: ["token"],
+    },
+    {
+      productId: "list-sub-9",
+      name: "Sub Extra 3",
+      type: "subscription" as const,
+      isActive: true,
+      entitlements: ["subject_access", "token"],
+    },
+    {
+      productId: "list-sub-10",
+      name: "Sub Inactive 2",
+      type: "subscription" as const,
+      isActive: false,
+      entitlements: ["token"],
+    },
   ];
   for (const p of base) {
     await seedProduct({

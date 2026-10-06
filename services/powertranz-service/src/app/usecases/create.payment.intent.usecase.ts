@@ -13,14 +13,23 @@ import {
 import { randomUUID } from "crypto";
 import { BadRequestError } from "../errors/bad-request.error";
 
+const POWERTRANZ_CURRENCY = "TTD";
+const USD_CURRENCY = "USD";
+const POWERTRANZ_CURRENCY_CODE = "780";
+const POWERTRANZ_3DS_CHALLENGE_WINDOW_SIZE = 4;
+const POWERTRANZ_3DS_CHALLENGE_INDICATOR = "01";
+export type PowerTranzCardType = "debit" | "credit";
+
 export interface CreatePowerTranzPaymentIntentInput {
   userId: string;
   userEmail?: string;
   priceId: string;
+  cardType?: PowerTranzCardType;
 }
 
 export interface CreatePowerTranzPaymentIntentOutput {
   redirectData?: unknown;
+  hostedPaymentPageHtml?: string;
   spiToken: string;
   transactionIdentifier?: string;
   orderIdentifier?: string;
@@ -54,15 +63,50 @@ export class CreatePaymentIntentUseCase {
     return url.toString();
   }
 
+  private hostedPagePageSet(): string | undefined {
+    const pageSet = config.powertranz.hostedPagePageSet.trim();
+    if (!pageSet) {
+      return undefined;
+    }
+
+    return pageSet.startsWith("PTZ/") ? pageSet : `PTZ/${pageSet}`;
+  }
+
+  private powerTranzAmount(amount: number, currency: string): number {
+    const normalizedCurrency = currency.trim().toUpperCase();
+    if (normalizedCurrency === POWERTRANZ_CURRENCY) {
+      return amount;
+    }
+
+    if (normalizedCurrency !== USD_CURRENCY) {
+      throw new BadRequestError(
+        `Unsupported PowerTranz source currency: ${currency}`,
+      );
+    }
+
+    const exchangeRate = config.powertranz.usdTtdExchangeRate;
+    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+      throw new Error("USD_TTD_EXCHANGE_RATE must be a positive number");
+    }
+
+    return Math.round(amount * exchangeRate * 100) / 100;
+  }
+
+  private shouldUseThreeDs(cardType?: PowerTranzCardType): boolean {
+    const effectiveCardType: PowerTranzCardType = cardType ?? "credit";
+
+    if (effectiveCardType === "debit") {
+      return false;
+    }
+
+    return config.powertranz.threeDsEnabled;
+  }
+
   async execute(
     input: CreatePowerTranzPaymentIntentInput,
   ): Promise<CreatePowerTranzPaymentIntentOutput> {
     const price = await this.getPriceUseCase.execute(input.priceId);
     const product = await this.getProductUseCase.execute(price.productId);
-
-    if (price.currency.toUpperCase() !== "USD") {
-      throw new BadRequestError("Only USD is supported");
-    }
 
     if (price.billingType !== BillingType.ONE_TIME) {
       throw new BadRequestError("Only one time payments are supported for now");
@@ -74,34 +118,30 @@ export class CreatePaymentIntentUseCase {
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const transactionIdentifier = randomUUID();
-    const orderIdentifier = `POWERTRANZ-${transactionIdentifier}`;
+    const orderIdentifier = transactionIdentifier;
+    const pageSet = this.hostedPagePageSet();
+    const powerTranzAmount = this.powerTranzAmount(price.amount, price.currency);
+    const threeDsEnabled = this.shouldUseThreeDs(input.cardType);
 
-    // PowerTranz Sale completes settlement after the browser returns and we post
-    // the SPI token to /payment, so we do not need a separate capture step.
-    const sale = await this.powerTranzClient.createSaleSpiToken({
+    const sale = await this.powerTranzClient.createAuthSpiToken({
       TransactionIdentifier: transactionIdentifier,
-      TotalAmount: price.amount,
-      CurrencyCode: "840",
-      ThreeDSecure: true,
-      Source: {},
+      TotalAmount: powerTranzAmount,
+      CurrencyCode: POWERTRANZ_CURRENCY_CODE,
+      ThreeDSecure: threeDsEnabled,
       OrderIdentifier: orderIdentifier,
-      BillingAddress: {
-        FirstName: "Student",
-        LastName: "Customer",
-        CountryCode: "840",
-        ...(input.userEmail ? { EmailAddress: input.userEmail } : {}),
-      },
       AddressMatch: false,
       ExtendedData: {
-        ThreeDSecure: {
-          ChallengeWindowSize: 4,
-          ChallengeIndicator: "01",
-        },
         MerchantResponseUrl: this.merchantResponseUrl(),
+        ...(threeDsEnabled
+          ? {
+              ThreeDSecure: {
+                ChallengeWindowSize: POWERTRANZ_3DS_CHALLENGE_WINDOW_SIZE,
+                ChallengeIndicator: POWERTRANZ_3DS_CHALLENGE_INDICATOR,
+              },
+            }
+          : {}),
         HostedPage: {
-          ...(config.powertranz.hostedPagePageSet
-            ? { PageSet: config.powertranz.hostedPagePageSet }
-            : {}),
+          ...(pageSet ? { PageSet: pageSet } : {}),
           ...(config.powertranz.hostedPagePageName
             ? { PageName: config.powertranz.hostedPagePageName }
             : {}),
@@ -116,8 +156,8 @@ export class CreatePaymentIntentUseCase {
       priceId: input.priceId,
       productId: price.productId,
       spiToken: sale.spiToken,
-      amount: price.amount,
-      currency: price.currency,
+      amount: powerTranzAmount,
+      currency: POWERTRANZ_CURRENCY,
       status: "pending_payment",
       expiresAt: expiresAt.toISOString(),
       createdAt: new Date().toISOString(),
@@ -129,12 +169,13 @@ export class CreatePaymentIntentUseCase {
 
     return {
       redirectData: sale.redirectData,
+      hostedPaymentPageHtml: sale.hostedPaymentPageHtml,
       spiToken: sale.spiToken,
       transactionIdentifier: intent.transactionId,
       orderIdentifier: intent.orderIdentifier,
       expiresAt: expiresAt.toISOString(),
-      amount: price.amount,
-      currency: price.currency,
+      amount: powerTranzAmount,
+      currency: POWERTRANZ_CURRENCY,
       priceId: input.priceId,
       productId: price.productId,
     };
