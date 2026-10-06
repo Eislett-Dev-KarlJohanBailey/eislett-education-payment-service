@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent } from "aws-lambda";
 import { parseRequest } from "./parse-request";
 import { routes } from "./routes";
-import { response, errorResponse } from "./response";
+import { response, errorResponse, corsHeaders } from "./response";
 import { requireUser } from "@libs/domain";
 
 function normalizePath(path: string): string {
@@ -25,6 +25,10 @@ function findRouteHandler(method: string, path: string): ((req: any) => Promise<
 
 export async function apiHandler(event: APIGatewayProxyEvent) {
   try {
+    if (event.httpMethod === "OPTIONS") {
+      return { statusCode: 204, headers: { ...corsHeaders }, body: "" };
+    }
+
     console.log("Received event:", JSON.stringify(event, null, 2));
     
     const user = requireUser(event);
