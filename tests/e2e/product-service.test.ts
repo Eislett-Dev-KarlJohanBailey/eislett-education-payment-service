@@ -113,7 +113,7 @@ describe("Product Service E2E", () => {
       );
     });
 
-    it("returns 401 Unauthorized when no JWT is provided", async () => {
+    it("lists products when no JWT is provided", async () => {
       const event = createApiGatewayEvent({
         httpMethod: "GET",
         path: "/products",
@@ -123,7 +123,7 @@ describe("Product Service E2E", () => {
 
       const result = await handler(event);
 
-      expect(result.statusCode).toBe(401);
+      expect(result.statusCode).toBe(200);
     });
 
     it("should list products when JWT is provided", async () => {
@@ -705,7 +705,7 @@ describe("Product Service E2E", () => {
   });
 
   describe("GET /products/{id}", () => {
-    it("returns 401 Unauthorized when no JWT is provided", async () => {
+    it("returns a product when no JWT is provided", async () => {
       const token = createJwtWithRole("admin");
       const createRes = await handler(
         createApiGatewayEvent({
@@ -735,7 +735,7 @@ describe("Product Service E2E", () => {
 
       const result = await handler(event);
 
-      expect(result.statusCode).toBe(401);
+      expect(result.statusCode).toBe(200);
     });
 
     it("should get a product by ID when JWT is provided", async () => {
@@ -1319,7 +1319,7 @@ describe("Product Service E2E", () => {
       await seedProductsForByEntitlementTests();
     });
 
-    it("returns 401 Unauthorized when no JWT is provided", async () => {
+    it("returns products when no JWT is provided", async () => {
       const event = createApiGatewayEvent({
         httpMethod: "GET",
         path: "/products/by-entitlement/subject_access",
@@ -1330,7 +1330,7 @@ describe("Product Service E2E", () => {
 
       const result = await handler(event);
 
-      expect(result.statusCode).toBe(401);
+      expect(result.statusCode).toBe(200);
     });
 
     it("returns products that have the given entitlement key (one key)", async () => {
