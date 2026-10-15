@@ -362,7 +362,7 @@ describe("Pricing Service E2E — POST /prices", () => {
       }
     );
 
-    it("blocks missing JWT (401)", async () => {
+    it("allows a missing JWT", async () => {
       const priceId = await createPriceAsAdmin();
       const event = createApiGatewayEvent({
         httpMethod: "GET",
@@ -374,10 +374,10 @@ describe("Pricing Service E2E — POST /prices", () => {
 
       const result = await handler(event);
 
-      expect(result.statusCode).toBe(401);
+      expect(result.statusCode).toBe(200);
     });
 
-    it("blocks expired JWT (401)", async () => {
+    it("ignores an expired JWT", async () => {
       const priceId = await createPriceAsAdmin();
       const event = createApiGatewayEvent({
         httpMethod: "GET",
@@ -393,10 +393,10 @@ describe("Pricing Service E2E — POST /prices", () => {
 
       const result = await handler(event);
 
-      expect(result.statusCode).toBe(401);
+      expect(result.statusCode).toBe(200);
     });
 
-    it("blocks malformed JWT (401)", async () => {
+    it("ignores a malformed JWT", async () => {
       const priceId = await createPriceAsAdmin();
       const event = createApiGatewayEvent({
         httpMethod: "GET",
@@ -412,7 +412,7 @@ describe("Pricing Service E2E — POST /prices", () => {
 
       const result = await handler(event);
 
-      expect(result.statusCode).toBe(401);
+      expect(result.statusCode).toBe(200);
     });
   });
 

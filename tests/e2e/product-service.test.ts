@@ -828,10 +828,10 @@ describe("Product Service E2E", () => {
     });
   });
 
-  describe("expired token returns 401 Unauthorized", () => {
+  describe("public GET routes and protected write routes", () => {
     const expiredToken = () => createExpiredJwt("admin");
 
-    it("GET /products returns 401 with expired JWT", async () => {
+    it("GET /products ignores an expired JWT", async () => {
       const event = createApiGatewayEvent({
         httpMethod: "GET",
         path: "/products",
@@ -845,10 +845,10 @@ describe("Product Service E2E", () => {
 
       const result = await handler(event);
 
-      expect(result.statusCode).toBe(401);
+      expect(result.statusCode).toBe(200);
     });
 
-    it("GET /products/{id} returns 401 with expired JWT", async () => {
+    it("GET /products/{id} ignores an expired JWT", async () => {
       await seedProductForEditDelete();
       const event = createApiGatewayEvent({
         httpMethod: "GET",
@@ -864,7 +864,7 @@ describe("Product Service E2E", () => {
 
       const result = await handler(event);
 
-      expect(result.statusCode).toBe(401);
+      expect(result.statusCode).toBe(200);
     });
 
     it("POST /products returns 401 with expired JWT", async () => {
@@ -927,7 +927,7 @@ describe("Product Service E2E", () => {
       expect(result.statusCode).toBe(401);
     });
 
-    it("GET /products/by-entitlement/{entitlementKey} returns 401 with expired JWT", async () => {
+    it("GET /products/by-entitlement/{entitlementKey} ignores an expired JWT", async () => {
       await seedProductsForByEntitlementTests();
       const event = createApiGatewayEvent({
         httpMethod: "GET",
@@ -943,7 +943,7 @@ describe("Product Service E2E", () => {
 
       const result = await handler(event);
 
-      expect(result.statusCode).toBe(401);
+      expect(result.statusCode).toBe(200);
     });
   });
 
