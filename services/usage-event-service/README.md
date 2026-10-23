@@ -99,9 +99,10 @@ See [docs/usage-events-sqs.md](../../docs/usage-events-sqs.md) for more detail a
 
 ## Environment Variables
 
-| Variable             | Description |
-|----------------------|-------------|
-| `ENTITLEMENTS_TABLE` | DynamoDB table name for entitlements (from access-service) |
+| Variable             | Description                                                   |
+|----------------------|---------------------------------------------------------------|
+| `ENTITLEMENTS_TABLE` | DynamoDB table name for entitlements (from access-service)   |
+| `USAGE_LOGS_TABLE`   | DynamoDB table name for the 90-day usage audit log           |
 
 ## Behaviour
 
