@@ -59,8 +59,8 @@ resource "aws_sqs_queue" "usage_event_dlq" {
 # SQS Queue for Usage Events (producers push directly; batch size 20)
 resource "aws_sqs_queue" "usage_event_queue" {
   name                       = "${var.project_name}-${var.environment}-usage-event-queue"
-  visibility_timeout_seconds  = 300
-  message_retention_seconds   = 1209600
+  visibility_timeout_seconds = 300
+  message_retention_seconds  = 1209600
   receive_wait_time_seconds  = 20
 
   redrive_policy = jsonencode({
@@ -83,11 +83,11 @@ resource "aws_sqs_queue_policy" "usage_event_queue_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowSendFromAccount"
-        Effect = "Allow"
+        Sid       = "AllowSendFromAccount"
+        Effect    = "Allow"
         Principal = "*"
-        Action   = "sqs:SendMessage"
-        Resource = aws_sqs_queue.usage_event_queue.arn
+        Action    = "sqs:SendMessage"
+        Resource  = aws_sqs_queue.usage_event_queue.arn
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -98,6 +98,35 @@ resource "aws_sqs_queue_policy" "usage_event_queue_policy" {
   })
 }
 
+# Usage records are retained for 90 days by the application-provided TTL.
+resource "aws_dynamodb_table" "usage_logs" {
+  name         = "${var.project_name}-${var.environment}-usage-logs"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "PK"
+  range_key    = "SK"
+
+  attribute {
+    name = "PK"
+    type = "S"
+  }
+
+  attribute {
+    name = "SK"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
+  tags = {
+    Environment = var.environment
+    Service     = "usage-event-service"
+    Name        = "Usage Logs Table"
+  }
+}
+
 module "usage_event_service_iam_role" {
   source = "../../modules/lambda_iam_role"
 
@@ -105,7 +134,8 @@ module "usage_event_service_iam_role" {
 
   dynamodb_table_arns = [
     data.terraform_remote_state.access_service.outputs.entitlements_table_arn,
-    "${data.terraform_remote_state.access_service.outputs.entitlements_table_arn}/index/*"
+    "${data.terraform_remote_state.access_service.outputs.entitlements_table_arn}/index/*",
+    aws_dynamodb_table.usage_logs.arn
   ]
 
   tags = {
@@ -165,6 +195,7 @@ module "usage_event_lambda" {
   environment_variables = {
     ENTITLEMENTS_TABLE            = data.terraform_remote_state.access_service.outputs.entitlements_table_name
     ENTITLEMENT_UPDATES_TOPIC_ARN = data.terraform_remote_state.access_service.outputs.entitlement_updates_topic_arn
+    USAGE_LOGS_TABLE              = aws_dynamodb_table.usage_logs.name
   }
 }
 
