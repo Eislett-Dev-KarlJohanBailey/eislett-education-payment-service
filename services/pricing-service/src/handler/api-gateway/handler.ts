@@ -160,13 +160,8 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
       ...extractedPathParams,
     };
 
-    const pathOnly = normalizedPath.split("?")[0].replace(/\/$/, "") || "/";
-    const isPostPrices = req.method === "POST" && pathOnly === "/prices";
-    const isGetPriceById =
-      req.method === "GET" && /^\/prices\/[^/]+$/.test(pathOnly);
-
     let user: { id: string; role?: string } | undefined;
-    if (isPostPrices || isGetPriceById) {
+    if (req.method === "POST") {
       user = requireUser(event) ?? undefined;
     } else {
       user = optionalUser(event) ?? undefined;

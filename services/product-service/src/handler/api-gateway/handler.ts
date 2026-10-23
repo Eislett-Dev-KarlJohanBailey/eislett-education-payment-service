@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent } from "aws-lambda";
 import { parseRequest } from "./parse-request";
 import { routes } from "./routes";
 import { response, errorResponse, corsHeaders } from "./response";
-import { requireUser } from "@libs/domain";
+import { optionalUser, requireUser } from "@libs/domain";
 
 /**
  * Normalizes the path by removing /v1 prefix if present
@@ -104,8 +104,9 @@ export async function apiHandler(event: APIGatewayProxyEvent) {
       return response(404, { message: "Route not found" });
     }
 
-    //require jwt
-    const user = requireUser(event);
+    const user = req.method === "GET"
+      ? optionalUser(event) ?? undefined
+      : requireUser(event);
 
     const normalizedReqWithUser = {
       ...req,
